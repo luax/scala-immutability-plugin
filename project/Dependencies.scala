@@ -9,6 +9,5 @@ object Dependencies {
   val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
 
   // Projects
-  val backendDeps =
-    Seq(scalatic, scalatest % Test)
+  val backendDeps = Seq(scalatic, scalatest % Test)
 }

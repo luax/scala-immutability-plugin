@@ -2,7 +2,8 @@ import Dependencies._
 
 lazy val commonSettings = Seq(
   version := "1.0.0",
-  scalaVersion := "2.11.8"
+  scalaVersion := "2.11.8",
+  scalacOptions ++= Seq("-unchecked", "-deprecation")
 )
 
 // Scalac command line options to install our compiler plugin.
@@ -16,6 +17,9 @@ lazy val usePluginSettings = Seq(
      Seq(addPlugin, dummy)
   }
 )
+
+lazy val root = (project in file(".")).
+  aggregate(plugin, demo)
 
 // This subproject contains a Scala compiler plugin
 lazy val plugin = (project in file("plugin")).
