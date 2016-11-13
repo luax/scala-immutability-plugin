@@ -15,6 +15,6 @@ class ExampleSpec extends FlatSpec with Matchers {
     val emptyStack = new Stack[Int]
     a [NoSuchElementException] should be thrownBy {
       emptyStack.pop()
-    } 
+    }
   }
 }
