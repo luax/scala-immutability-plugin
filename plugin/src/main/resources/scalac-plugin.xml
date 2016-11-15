@@ -1,4 +1,4 @@
 <plugin>
-  <name>divbyzero</name>
-  <classname>DivByZero</classname>
+  <name>stats-plugin</name>
+  <classname>StatsPlugin</classname>
 </plugin>
