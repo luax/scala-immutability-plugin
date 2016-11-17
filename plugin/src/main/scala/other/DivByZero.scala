@@ -1,5 +1,7 @@
-import scala.tools.nsc.{Global, Phase}
+package other
+
 import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
+import scala.tools.nsc.{Global, Phase}
 
 class DivByZero(val global: Global) extends NscPlugin {
 

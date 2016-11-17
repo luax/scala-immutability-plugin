@@ -1,7 +1,15 @@
+class Mutable() {
+  var mutableString = "foo"
+  val immutableString = "secret"
 
-class Mutable(var value: String) {
+  private var mutableInClassString = "bar"  // And companion object
+  private[this] var mutableInThisObject = "baz"
 }
 
-class MutableBuddy() {
-  var value: String = "hello"
+
+object Main {
+  def main(args: Array[String]): Unit = {
+    val m = new Mutable
+    m.mutableString = "bar"
+  }
 }

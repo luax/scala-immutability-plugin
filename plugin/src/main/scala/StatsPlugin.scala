@@ -1,12 +1,8 @@
+import components.{ReporterPluginComponent, StatsPluginComponent}
+
 import scala.tools.nsc.{Global, Phase}
 import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
-import scala.collection.{mutable, immutable}
-
-object Log {
-  def log(msg: => String): Unit = {
-    println(msg)
-  }
-}
+import scala.collection.{immutable, mutable}
 
 class StatsPlugin(val global: Global) extends NscPlugin {
   val name = "stats-plugin"
