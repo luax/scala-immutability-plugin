@@ -1,8 +1,8 @@
 package components
 
-import helpers.Log
+import helpers.Utils
 
-import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
+import scala.tools.nsc.plugins.{PluginComponent => NscPluginComponent}
 import scala.tools.nsc.{Global, Phase}
 
 class StatsPluginComponent(val global: Global) extends NscPluginComponent {
@@ -17,7 +17,18 @@ class StatsPluginComponent(val global: Global) extends NscPluginComponent {
   val classTraverser = new ClassTraverser
 
   /*
-    Count occurrences
+   * Helper functions
+   */
+  def notifyTest(pos: Position, message: String): Unit = {
+    if (Utils.isScalaTest) {
+      // False negative error to notify test that it was successful
+      global.reporter.error(pos, message)
+    }
+  }
+
+
+  /*
+   * Count occurrences
    */
   def numOfClasses = countTraverser.classes.size
 
@@ -96,6 +107,8 @@ class StatsPluginComponent(val global: Global) extends NscPluginComponent {
 
       println("Mutable classes traverse")
       classTraverser.traverse(unit.body)
+
+      notifyTest(unit.body.pos, "foo")
 
       println("Done with phase: " + phase)
     }

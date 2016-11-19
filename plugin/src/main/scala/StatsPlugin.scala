@@ -8,6 +8,6 @@ class StatsPlugin(val global: Global) extends NscPlugin {
   val name = "stats-plugin"
   val description = "TODO plugin"
   var statsPluginComponent = new StatsPluginComponent(global)
-  val reporterPluginComponent =  new ReporterPluginComponent(global, statsPluginComponent)
+  val reporterPluginComponent = new ReporterPluginComponent(global, statsPluginComponent)
   val components = List[NscPluginComponent](statsPluginComponent, reporterPluginComponent)
 }
