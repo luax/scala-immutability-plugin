@@ -9,12 +9,12 @@ lazy val commonSettings = Seq(
 // Scalac command line options to install our compiler plugin.
 lazy val usePluginSettings = Seq(
   scalacOptions in Compile ++= {
-     val jar: File = (Keys.`package` in (plugin, Compile)).value
-     val addPlugin = "-Xplugin:" + jar.getAbsolutePath
-     // add plugin timestamp to compiler options to trigger recompile of
-     // main after editing the plugin. (Otherwise a 'clean' is needed.)
-     val dummy = "-Jdummy=" + jar.lastModified
-     Seq(addPlugin, dummy)
+    val jar: File = (Keys.`package` in(plugin, Compile)).value
+    val addPlugin = "-Xplugin:" + jar.getAbsolutePath
+    // add plugin timestamp to compiler options to trigger recompile of
+    // main after editing the plugin. (Otherwise a 'clean' is needed.)
+    val dummy = "-Jdummy=" + jar.lastModified
+    Seq(addPlugin, dummy)
   }
 )
 
