@@ -1,3 +1,10 @@
+import java.util.concurrent.CountDownLatch
+
+import lattice.{DefaultKey, Lattice, LatticeViolationException, NaturalNumberKey, NaturalNumberLattice}
+import cell.{Cell, CellCompleter, HandlerPool}
+
+import scala.util.{Failure, Success, Try}
+
 class Mutable() {
   var mutableString = "foo"
   val immutableString = "secret"
@@ -30,5 +37,28 @@ object Main {
     println(t.x)
     t.x = 5
     println(t.x)
+
+    val intLattice: Lattice[Int] = new NaturalNumberLattice
+
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    pool.execute { () =>
+      val completer = CellCompleter[DefaultKey[Int], Int](pool, new DefaultKey[Int])(intLattice)
+      val cell = completer.cell
+      cell.onComplete {
+        case Success(v) =>
+          latch.countDown()
+        case Failure(e) =>
+          latch.countDown()
+      }
+      completer.putFinal(5)
+    }
+    latch.await()
+    pool.onQuiescent { () =>
+      println("quiescent")
+    }
+    pool.shutdown()
+
   }
 }

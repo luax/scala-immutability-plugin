@@ -3,7 +3,8 @@ import Dependencies._
 lazy val commonSettings = Seq(
   version := "1.0.0",
   scalaVersion := "2.11.8",
-  scalacOptions ++= Seq("-unchecked", "-deprecation")
+  scalacOptions ++= Seq("-unchecked", "-deprecation"),
+  unmanagedBase := baseDirectory.value / "../lib"
 )
 
 // Scalac command line options to install our compiler plugin.
