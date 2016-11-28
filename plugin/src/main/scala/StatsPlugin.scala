@@ -1,13 +1,24 @@
-import components.{ReporterPluginComponent, StatsPluginComponent}
+import components.{MutabilityComponent, ReporterComponent, ScanComponent}
+import helpers.Utils
 
-import scala.tools.nsc.{Global, Phase}
+import scala.tools.nsc.Global
 import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
-import scala.collection.{immutable, mutable}
 
 class StatsPlugin(val global: Global) extends NscPlugin {
   val name = "stats-plugin"
   val description = "TODO plugin"
-  var statsPluginComponent = new StatsPluginComponent(global)
-  val reporterPluginComponent = new ReporterPluginComponent(global, statsPluginComponent)
-  val components = List[NscPluginComponent](statsPluginComponent, reporterPluginComponent)
+
+  val phaseOne = "phase name 1"
+  val phaseTwo = "phase name 2"
+  val phaseThree = "phase name 3"
+
+  Utils.newPool // TODO:
+
+  println("Starting plugin!")
+
+  var scanComponent = new ScanComponent(global, phaseOne, "refchecks")
+  val mutabilityPluginComponent = new MutabilityComponent(global, phaseTwo, phaseOne, scanComponent)
+  val reporterPluginComponent = new ReporterComponent(global, phaseThree, phaseTwo, scanComponent, mutabilityPluginComponent)
+
+  val components = List[NscPluginComponent](scanComponent, mutabilityPluginComponent, reporterPluginComponent)
 }

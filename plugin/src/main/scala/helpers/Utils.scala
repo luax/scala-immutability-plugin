@@ -3,7 +3,7 @@ package helpers
 import java.io.File
 import java.net.URLClassLoader
 
-import scala.tools.nsc.{Global, Phase}
+import cell.HandlerPool
 
 object Utils {
   private val ScalaTestPattern = "scalatest"
@@ -26,7 +26,17 @@ object Utils {
 
   def getCurrentTestMessage: String = System.getProperty(TestExpectedMessagePropertyStr)
 
+  def setCurrentTestMessage(mutabilityMessage: String): Unit = System.setProperty(Utils.TestExpectedMessagePropertyStr, mutabilityMessage)
+
   def isScalaTest = scalaTestClassPathFound
+
+  private var pool: HandlerPool = null
+
+  def newPool = {
+    pool = new HandlerPool()
+  }
+
+  def getPool: HandlerPool = pool
 
 
   // TODO constants

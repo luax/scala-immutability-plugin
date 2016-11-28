@@ -1,26 +1,30 @@
 import Dependencies._
 
+val pluginAssemblyJarName = "plugin.jar"
+
 lazy val commonSettings = Seq(
   version := "1.0.0",
   scalaVersion := "2.11.8",
   scalacOptions ++= Seq("-unchecked", "-deprecation"),
-  unmanagedBase := baseDirectory.value / "../lib"
+  unmanagedBase := baseDirectory.value / "../lib",
+  parallelExecution in Test := false, // Turned off because of global state using "System.setProperty"
+  exportJars := true
 )
 
 // Scalac command line options to install our compiler plugin.
 lazy val usePluginSettings = Seq(
   scalacOptions in Compile ++= {
     val jar: File = (Keys.`package` in(plugin, Compile)).value
-    val addPlugin = "-Xplugin:" + jar.getAbsolutePath
+    // TODO:
+    // Make path to plugin dynamic
+    //
+    val addPlugin = "-Xplugin:" + "./plugin/target/scala-2.11/plugin.jar" // jar.getAbsolutePath
     // add plugin timestamp to compiler options to trigger recompile of
     // main after editing the plugin. (Otherwise a 'clean' is needed.)
     val dummy = "-Jdummy=" + jar.lastModified
     Seq(addPlugin, dummy)
   }
 )
-
-lazy val root = (project in file(".")).
-  aggregate(plugin, demo)
 
 // This subproject contains a Scala compiler plugin
 lazy val plugin = (project in file("plugin")).
@@ -30,10 +34,15 @@ lazy val plugin = (project in file("plugin")).
     libraryDependencies += ("org.scala-lang" % "scala-library" % scalaVersion.value),
     libraryDependencies += ("org.scala-lang" % "scala-compiler" % scalaVersion.value),
     libraryDependencies ++= backendDeps,
-    publishArtifact in Compile := false
+    assemblyJarName in assembly := pluginAssemblyJarName
   )
 
 lazy val demo = (project in file("demo")).
   settings(commonSettings: _*).
   settings(usePluginSettings: _*).
-  dependsOn(plugin)
+  settings(
+    publishArtifact in Compile := false
+  )
+// TODO:
+// Make "assembly" or something run on the plugin to include dependencies in the jar
+// dependsOn(plugin)
