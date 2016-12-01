@@ -1,4 +1,4 @@
-import mutables.Point
+import mutables.{Point, Graph}
 
 object Program {
   def main(args: Array[String]): Unit = {
@@ -8,5 +8,12 @@ object Program {
     println(p1.isNotSimilar(p2))
     println(p1.isNotSimilar(p3))
     println(p1.isNotSimilar(2))
+
+    val g = new Graph
+    val n1 = g.newNode
+    val n2 = g.newNode
+    val n3 = g.newNode
+    n1.connectTo(n2)
+    n3.connectTo(n1)
   }
 }

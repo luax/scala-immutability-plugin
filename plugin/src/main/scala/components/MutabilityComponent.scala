@@ -6,6 +6,7 @@ import immutability._
 
 import scala.tools.nsc.plugins.{PluginComponent => NscPluginComponent}
 import scala.tools.nsc.{Global, Phase}
+import scala.util.{Failure, Success}
 
 class MutabilityComponent(val global: Global, val phaseName: String, val runsAfterPhase: String, val scanComponent: ScanComponent) extends NscPluginComponent {
 
@@ -21,71 +22,20 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
 
   class MutabilityTraverser() extends Traverser {
 
-    override def traverse(tree: Tree): Unit = tree match {
-      case cls@ClassDef(mods, name, tparams, impl) =>
-        val klass = cls.symbol
 
-        for (parent <- klass.tpe.parents) {
-          val parentCompleter = classToCellCompleter.getOrElse(parent.typeSymbol, null)
-          // println(s"Parent: $parent")
-          if (parentCompleter == null) {
-            Utils.log(s"Did not find a cell completer for parent, c: $klass, parent: $parent.typeSymbol")
-          } else {
-            val klassCompleter = classToCellCompleter.getOrElse(klass, null)
-            if (klassCompleter == null) {
-              classesWithoutCellCompleter += klass
-              Utils.log(s"Did not find a cell completer for this class: $klass")
-              // TODO:
-              // String, Object is immutable etc
-              return
-            } else {
-              if (parentCompleter.cell.isComplete) {
-                // If a superclass is mutable all subclasses are also mutable.
-                // A subclass can never have a "better" mutability than it's superclass.
-                klassCompleter.putFinal(parentCompleter.cell.getResult)
-              } else {
-                klassCompleter.cell.whenNext(parentCompleter.cell, (x: Immutability) => {
-                  if (x == Mutable) {
-                    WhenNextComplete
-                  } else {
-                    FalsePred
-                  }
-                }, None)
-              }
-            }
-          }
-        }
+    def forEachParentOfClass (klass: Symbol): Unit = {
+      for (parent <- klass.tpe.parents) {
 
-        traverse(impl)
-
-      case vd@ValDef(mods, name, tpt, rhs) =>
-        val klass = vd.symbol.owner
-        if (klass.isClass) {
+        val parentCompleter = classToCellCompleter.getOrElse(parent.typeSymbol, null)
+        if (parentCompleter != null) {
           val klassCompleter = classToCellCompleter.getOrElse(klass, null)
-          if (klassCompleter == null) {
-            Utils.log(s"Did not find a cell completer for this klass, c: $klass, field: $vd")
-            classesWithoutCellCompleter += klass
-            return
-          }
-
-          // Owner of value definition is a class
-          if (mods.hasFlag(MUTABLE)) {
-            // It's a mutable value, e.g. "var x"
-            klassCompleter.putFinal(Mutable)
-          } else if (!mods.hasFlag(SYNTHETIC)) {
-            // It's an immutable values, e.g. "val x"
-            val assignedType = rhs.tpe
-            val assignedTypeSymbol = assignedType.typeSymbol
-            val assignedTypeCompleter = classToCellCompleter.getOrElse(assignedTypeSymbol, null)
-            if (assignedTypeCompleter == null) {
-              Utils.log(s"Did not find a cell completer for this assignment, c: $klass, field: $vd")
-              assignmentWithoutCellCompleter += assignedTypeSymbol
-              return
-            }
-            if (assignedTypeCompleter.cell.isComplete) {
-              klassCompleter.putNext(assignedTypeCompleter.cell.getResult)
+          if (klassCompleter != null) {
+            if (parentCompleter.cell.isComplete) {
+              // If a superclass is mutable all subclasses are also mutable.
+              // A subclass can never have a "better" mutability than it's superclass.
+              klassCompleter.putFinal(parentCompleter.cell.getResult)
             } else {
-              assignedTypeCompleter.cell.whenNext(klassCompleter.cell, (x: Immutability) => {
+              klassCompleter.cell.whenNext(parentCompleter.cell, (x: Immutability) => {
                 if (x == Mutable) {
                   WhenNextComplete
                 } else {
@@ -93,6 +43,71 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
                 }
               }, None)
             }
+          } else {
+            classesWithoutCellCompleter += klass
+            Utils.log(s"Did not find a cell completer for this CLASS: $klass")
+            // TODO:
+            // String, Object is immutable etc
+
+          }
+        } else {
+          Utils.log(s"Did not find a cell completer for PARENT, c: $klass, parent: $parent.typeSymbol")
+        }
+      }
+    }
+
+
+    override def traverse(tree: Tree): Unit = tree match {
+      case cls@ClassDef(mods, name, tparams, impl) =>
+        val klass = cls.symbol
+        Utils.log(s"Inspecting class: $klass")
+        forEachParentOfClass(klass)
+        traverse(impl)
+
+      case foo@ModuleDef(mods: Modifiers, name: TermName, impl: Template) =>
+        println(foo)
+
+      case vd@ValDef(mods, name, tpt, rhs) =>
+        val klass = vd.symbol.owner
+        Utils.log(s"Inspecting vd: $vd")
+
+        if (klass.isClass) {
+          // The owner of the value defintion is a class
+          val klassCompleter = classToCellCompleter.getOrElse(klass, null)
+          if (klassCompleter != null) {
+            if (mods.hasFlag(MUTABLE)) {
+              // It's a mutable value, e.g. "var x"
+              klassCompleter.putFinal(Mutable)
+            } else if (!mods.hasFlag(SYNTHETIC)) {
+              // It's an immutable values, e.g. "val x"
+              // Investigate the "right-hand" side of the assignment
+              val assignedType = rhs.tpe // E.g. new String("foo")
+              val assignedTypeSymbol = assignedType.typeSymbol // E.g. "class String"
+              val assignedTypeCompleter = classToCellCompleter.getOrElse(assignedTypeSymbol, null)
+              if (assignedTypeCompleter != null) {
+                // Check the cell of the right-hand side's class, e.g. "Foo" in "val x = new Foo"
+                if (assignedTypeCompleter.cell.isComplete) {
+                  // The cell of "Foo" was complete, set owner of vd cell to the same mutability
+                  klassCompleter.putNext(assignedTypeCompleter.cell.getResult)
+                } else {
+                  // Cell not completed yet, when assigned a mutability also set owner of vd cell
+                  // to the same mutability
+                  assignedTypeCompleter.cell.whenNext(klassCompleter.cell, (x: Immutability) => {
+                    if (x == Mutable) {
+                      WhenNextComplete
+                    } else {
+                      FalsePred
+                    }
+                  }, None)
+                }
+              } else {
+                Utils.log(s"Did not find a cell completer for this ASSIGNMENT, c: $klass, field: $vd")
+                assignmentWithoutCellCompleter += assignedTypeSymbol
+              }
+            }
+          } else {
+            Utils.log(s"Did not find a cell completer for this CLASS, c: $klass, field: $vd")
+            classesWithoutCellCompleter += klass
           }
         } else {
           Utils.log(s"owner is not a class of field: $vd")

@@ -7,7 +7,7 @@ import scala.collection.mutable.ListBuffer
 import scala.tools.nsc._
 import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
 
-class ReporterComponent(val global: Global, val phaseName: String, val runsAfterPhase: String, val scanComponent: ScanComponent, val mutabilityPluginComponent: MutabilityComponent) extends NscPluginComponent {
+class ReporterComponent(val global: Global, val phaseName: String, val runsAfterPhase: String, val scanComponent: ScanComponent, val mutabilityComponent: MutabilityComponent) extends NscPluginComponent {
 
   import global._
 
@@ -30,7 +30,7 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
   }
 
   def notifyTest(): Unit = {
-    for ((klass, v) <- mutabilityPluginComponent.classToCellCompleter) {
+    for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
       val classSymbol = klass.asInstanceOf[Symbol]
       v.cell.getResult match {
         case Mutable => {
@@ -51,16 +51,15 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
   class NewPhase(prev: Phase) extends StdPhase(prev) {
     override def apply(unit: CompilationUnit): Unit = {
       if (Utils.isScalaTest) {
-        notifyTest()
         // For testing
+        Utils.getPool.whileQuiescentResolveDefault
         Utils.getPool.shutdown()
+        notifyTest()
         Utils.newPool
-      }
-      if (!hasRun) {
+      } else if (!hasRun) {
         hasRun = true
 
-        // TODO:
-        // pool.whileQuiescentResolveDefault
+        Utils.getPool.whileQuiescentResolveDefault
         Utils.getPool.shutdown()
 
         reporter.echo("Plugin ran successfully")
@@ -75,7 +74,7 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
 
         var mutables = new ListBuffer[Symbol]()
         var immutables = new ListBuffer[Symbol]()
-        for ((klass, v) <- mutabilityPluginComponent.classToCellCompleter) {
+        for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
           val immutability = v.cell.getResult
           if (immutability == Mutable) {
             mutables += klass.asInstanceOf[Symbol]
@@ -88,7 +87,13 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
 
         reporter.echo("#immutable classes: " + immutables.size)
         reporter.echo(immutables.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-        reporter.echo("Reporter phase")
+
+        reporter.echo("#classes without cell completer: ")
+        reporter.echo(mutabilityComponent.classesWithoutCellCompleter.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+
+        reporter.echo("#assignments without cell completer: ")
+        reporter.echo(mutabilityComponent.assignmentWithoutCellCompleter.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+
       }
     }
   }

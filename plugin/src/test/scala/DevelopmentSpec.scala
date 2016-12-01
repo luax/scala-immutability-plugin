@@ -11,16 +11,10 @@ class DevelopmentSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("Immutable") -> Utils.IsDeeplyImmutable, List("Mutable", "A") -> Utils.IsMutable)) {
+    TestUtils.expectMutability(Map(List("A") -> Utils.IsDeeplyImmutable)) {
       """
-      class Mutable {
-        var mutable: Int = 0
-      }
-      class Immutable {
-        val immutable: Int = 0
-      }
-      class A extends Mutable {
-        val foo: String = "immutable"
+      class A  {
+        lazy val foo = new String("Bar")
       }
       """
     }

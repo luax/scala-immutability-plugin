@@ -195,4 +195,17 @@ class MutableSpec extends FlatSpec {
       """
     }
   }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Immutable") -> Utils.IsDeeplyImmutable, List("Mutable") -> Utils.IsMutable)) {
+      """
+      class Immutable {
+        val immutable: Mutable = new Mutable
+        class Mutable {
+          var mutable: Int = 0
+        }
+      }
+      """
+    }
+  }
 }
