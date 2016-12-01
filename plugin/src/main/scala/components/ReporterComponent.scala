@@ -72,28 +72,58 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
         reporter.echo("#classes with val: " + scanComponent.numOfClassesWithVal)
         reporter.echo("-")
 
-        var mutables = new ListBuffer[Symbol]()
-        var immutables = new ListBuffer[Symbol]()
+        var mutableClasses = new ListBuffer[Symbol]()
+        var mutableObjects = new ListBuffer[Symbol]()
+        var mutableTraits = new ListBuffer[Symbol]()
+
+        var immutableClasses = new ListBuffer[Symbol]()
+        var immutableObjects = new ListBuffer[Symbol]()
+        var immutableTraits = new ListBuffer[Symbol]()
+
         for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
           val immutability = v.cell.getResult
           if (immutability == Mutable) {
-            mutables += klass.asInstanceOf[Symbol]
+            val k = klass.asInstanceOf[Symbol]
+            if (k.isModuleClass) {
+              mutableObjects += k
+            } else {
+              if (k hasFlag Flag.TRAIT) {
+                mutableTraits += k
+              } else {
+                mutableClasses += k
+              }
+            }
           } else if (immutability == Immutable) {
-            immutables += klass.asInstanceOf[Symbol]
+            val k = klass.asInstanceOf[Symbol]
+            if (k.isModuleClass) {
+              immutableObjects += k
+            } else {
+              if (k hasFlag Flag.TRAIT) {
+                immutableTraits += k
+              } else {
+                immutableClasses += k
+              }
+            }
           }
         }
-        reporter.echo("#mutable classes: " + mutables.size)
-        reporter.echo(mutables.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-
-        reporter.echo("#immutable classes: " + immutables.size)
-        reporter.echo(immutables.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-
+        reporter.echo("#mutable classes: " + mutableClasses.size)
+        reporter.echo(mutableClasses.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("#mutable objects: " + mutableObjects.size)
+        reporter.echo(mutableObjects.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("#mutable traits: " + mutableTraits.size)
+        reporter.echo(mutableTraits.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("-")
+        reporter.echo("#immutable classes: " + immutableClasses.size)
+        reporter.echo(immutableClasses.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("#immutable objects: " + immutableObjects.size)
+        reporter.echo(immutableObjects.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("#immutable traits: " + immutableTraits.size)
+        reporter.echo(immutableTraits.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("-")
         reporter.echo("#classes without cell completer: ")
         reporter.echo(mutabilityComponent.classesWithoutCellCompleter.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-
         reporter.echo("#assignments without cell completer: ")
         reporter.echo(mutabilityComponent.assignmentWithoutCellCompleter.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-
       }
     }
   }
