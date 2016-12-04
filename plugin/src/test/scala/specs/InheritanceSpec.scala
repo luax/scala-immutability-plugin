@@ -1,23 +1,16 @@
+package specs
+
 import helpers.Utils
 import org.scalatest._
+import utils.TestUtils
 
-class MutableSpec extends FlatSpec {
+class InheritanceSpec extends FlatSpec {
 
   var i = 0
 
   def testNr: String = {
     i += 1
     i.toString
-  }
-
-  it should testNr in {
-    TestUtils.expectMutability("A", Utils.IsMutable) {
-      """
-      class A {
-        var foo: String = "mutate me"
-      }
-      """
-    }
   }
 
   it should testNr in {
@@ -67,16 +60,19 @@ class MutableSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(List("A", "B"), Utils.IsMutable) {
+    TestUtils.expectMutability(Map(List("A", "B", "C", "D") -> Utils.IsMutable, List("E") -> Utils.IsDeeplyImmutable)) {
       """
-      class A {
-        var foo: String = "mutate me"
-        val bar: String = "immutable"
+      class E()
+      class D extends C {
+        val test: String = "immutable"
+      }
+      class C extends B {
         val baz: String = "immutable"
       }
-      class B {
+      class B extends A {
         val bar: String = "immutable"
-        val baz: String = "immutable"
+      }
+      class A {
         var foo: String = "mutate me"
       }
       """
@@ -93,28 +89,6 @@ class MutableSpec extends FlatSpec {
       }
       class B extends A {
         val x: String = "immutable"
-      }
-      """
-    }
-  }
-
-  it should testNr in {
-    TestUtils.expectMutability("A", Utils.IsMutable) {
-      """
-      class A(var foo: String)
-      """
-    }
-  }
-
-  it should testNr in {
-    TestUtils.expectMutability("A", Utils.IsMutable) {
-      """
-      class B {
-        val foo: String = "immutable"
-      }
-
-      class A {
-        var foo: B = new B
       }
       """
     }
@@ -197,13 +171,33 @@ class MutableSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("Immutable") -> Utils.IsDeeplyImmutable, List("Mutable") -> Utils.IsMutable)) {
+    TestUtils.expectMutability(Map(List("X", "Y") -> Utils.IsDeeplyImmutable)) {
       """
+      abstract class X {
+        val x: String
+        println ("x is "+x.length)
+      }
+
+      object Y extends X {
+        lazy val x = "Hello"
+      }
+      """
+    }
+  }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Immutable") -> Utils.IsDeeplyImmutable, List("ShallowImmutable") -> Utils.IsShallowImmutable, List("Mutable") -> Utils.IsMutable)) {
+      """
+      class Mutable {
+        var mutable: Int = 0
+      }
+
       class Immutable {
-        val immutable: Mutable = new Mutable
-        class Mutable {
-          var mutable: Int = 0
-        }
+        val immutable: Int = 1
+      }
+
+      class ShallowImmutable extends Immutable {
+        val shallowImmutable: Mutable = new Mutable
       }
       """
     }

@@ -1,7 +1,7 @@
 package components
 
 import helpers.Utils
-import immutability.{Immutable, Mutable}
+import immutability.{Immutable, Mutable, ShallowImmutable}
 
 import scala.collection.mutable.ListBuffer
 import scala.tools.nsc._
@@ -22,10 +22,10 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
       Utils.log(s"Reporting '$errorMessage'")
       // False negative error to notify test that it was successful
       global.reporter.error(pos, errorMessage)
-      return true
+      true
     } else {
       Utils.log(s"Tried to report '$errorMessage' but want '$testMessage'")
-      return false
+      false
     }
   }
 
@@ -36,6 +36,11 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
         case Mutable => {
           if (notifyTest(classSymbol.pos, classSymbol, Utils.IsMutable)) {
             return // Break loop
+          }
+        }
+        case ShallowImmutable => {
+          if (notifyTest(classSymbol.pos, classSymbol, Utils.IsShallowImmutable)) {
+            return
           }
         }
         case Immutable => {
@@ -68,8 +73,10 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
         reporter.echo("#objects found: " + scanComponent.numOfObjects)
         reporter.echo("#templs found: " + scanComponent.numOfTempls)
         reporter.echo("-")
-        reporter.echo("#classes with var: " + scanComponent.numOfClassesWithVar)
-        reporter.echo("#classes with val: " + scanComponent.numOfClassesWithVal)
+        reporter.echo("#classes with var: " + scanComponent.classesWithVar.size)
+        reporter.echo(scanComponent.classesWithVar.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
+        reporter.echo("#classes with val: " + scanComponent.classesWithVal.size)
+        reporter.echo(scanComponent.classesWithVal.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
         reporter.echo("-")
 
         var mutableClasses = new ListBuffer[Symbol]()

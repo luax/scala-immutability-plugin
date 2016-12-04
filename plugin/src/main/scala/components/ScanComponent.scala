@@ -27,10 +27,6 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
   var classesWithoutCellCompleter: Set[Symbol] = Set()
   var assignmentWithoutCellCompleter: Set[Symbol] = Set()
 
-  def numOfClassesWithVar = classesWithVar.size
-
-  def numOfClassesWithVal = classesWithVal.size
-
   def numOfClasses = classes.size
 
   def numOfTraits = traits.size

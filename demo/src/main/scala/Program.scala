@@ -1,5 +1,14 @@
 import mutables.{Point, Graph}
 
+abstract class X {
+  val x: String
+  println ("x is "+x.length)
+}
+
+object Y extends X {
+  lazy val x = "Hello"
+}
+
 object Program {
   def main(args: Array[String]): Unit = {
     val p1 = new Point(2, 3)
