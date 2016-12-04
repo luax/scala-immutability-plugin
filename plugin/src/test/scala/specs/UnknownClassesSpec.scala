@@ -14,7 +14,8 @@ class UnknownClassesSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("A") -> Utils.IsDeeplyImmutable)) { // TODO: Unknown
+    TestUtils.expectMutability(Map(List("A") -> Utils.IsDeeplyImmutable)) {
+      // TODO: Unknown
       """
       import secret._
 

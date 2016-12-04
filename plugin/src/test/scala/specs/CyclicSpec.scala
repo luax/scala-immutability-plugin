@@ -19,9 +19,18 @@ class CyclicSpec extends FlatSpec {
       class A {
         var b: B = new B
       }
-
       class B {
         var a: A = new A
+      }
+      """
+    }
+    TestUtils.expectMutability(List("A", "B"), Utils.IsMutable) {
+      """
+      class B {
+        var a: A = new A
+      }
+      class A {
+        var b: B = new B
       }
       """
     }
@@ -33,9 +42,18 @@ class CyclicSpec extends FlatSpec {
       class A {
         var b: B = new B
       }
-
       class B {
         val a: A = new A
+      }
+      """
+    }
+    TestUtils.expectMutability(Map(List("B") -> Utils.IsShallowImmutable, List("A") -> Utils.IsMutable)) {
+      """
+      class B {
+        val a: A = new A
+      }
+      class A {
+        var b: B = new B
       }
       """
     }

@@ -26,6 +26,18 @@ class ImmutableSpec extends FlatSpec {
       }
       """
     }
+    TestUtils.expectMutability(List("A", "B"), Utils.IsDeeplyImmutable) {
+      """
+      class B extends A {
+        val x: String = "immutable"
+      }
+      class A {
+        val foo: String = "immutable"
+        val bar: String = "immutable"
+        val baz: String = "immutable"
+      }
+      """
+    }
   }
 
   it should testNr in {
@@ -45,6 +57,35 @@ class ImmutableSpec extends FlatSpec {
 
       class A {
         val foo: B = new B
+      }
+      """
+    }
+    TestUtils.expectMutability(List("A", "B"), Utils.IsDeeplyImmutable) {
+      """
+      class A {
+        val foo: B = new B
+      }
+      class B {
+        val foo: String = "immutable"
+      }
+      """
+    }
+  }
+
+  it should testNr in {
+    TestUtils.expectMutability(List("A", "B", "C", "D"), Utils.IsDeeplyImmutable) {
+      """
+      class A {
+        val foo: B = new B
+        class B {
+          val bar: C = new C
+          class C {
+            val baz: D = new D
+            class D {
+              val test: Int = 0
+            }
+          }
+        }
       }
       """
     }
