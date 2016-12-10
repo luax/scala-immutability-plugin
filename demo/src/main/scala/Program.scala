@@ -1,8 +1,10 @@
-import mutables.{Point, Graph}
+import mutables.{Graph, Point}
+
+import scala.collection.mutable.ArrayBuffer
 
 abstract class X {
   val x: String
-  println ("x is "+x.length)
+  println("x is " + x.length)
 }
 
 object Y extends X {
@@ -24,5 +26,11 @@ object Program {
     val n3 = g.newNode
     n1.connectTo(n2)
     n3.connectTo(n1)
+
+    val fruits = ArrayBuffer[String]()
+    fruits += "Apple"
+    fruits += "Banana"
+    fruits += "Orange"
+    println(fruits)
   }
 }

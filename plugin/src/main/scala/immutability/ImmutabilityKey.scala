@@ -1,7 +1,7 @@
 package immutability
 
 import cell._
-import lattice.{Key, Lattice}
+import lattice.Key
 
 object ImmutabilityKey extends Key[Immutability] {
 

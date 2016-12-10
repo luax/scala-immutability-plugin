@@ -46,6 +46,7 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     }
 
     def countClassDef(symbol: Symbol, mods: Modifiers): Unit = {
+
       if (symbol.isModuleClass) {
         objects += symbol
       } else {

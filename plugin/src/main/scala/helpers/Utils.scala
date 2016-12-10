@@ -15,6 +15,7 @@ object Utils {
   val IsMutable = "mutable"
   val IsShallowImmutable = "shallow immutable"
   val IsDeeplyImmutable = "deep immutable"
+  val IsUnknownMutability = "immutability unknown"
 
   def log(msg: => String): Unit = {
     if (LoggingEnabled) {
@@ -36,8 +37,10 @@ object Utils {
     pool = new HandlerPool()
   }
 
-  def getPool: HandlerPool = pool
-
-
-  // TODO constants
+  def getPool: HandlerPool = {
+    if (pool == null) {
+      newPool
+    }
+    pool
+  }
 }

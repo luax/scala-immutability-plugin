@@ -21,6 +21,11 @@ class MutableSpec extends FlatSpec {
       }
       """
     }
+    TestUtils.expectMutability("A", Utils.IsMutable) {
+      """
+      class A(var foo: String)
+      """
+    }
   }
 
   it should testNr in {
@@ -41,9 +46,40 @@ class MutableSpec extends FlatSpec {
   }
 
   it should testNr in {
+    TestUtils.expectMutability(List("A", "B", "C", "D"), Utils.IsMutable) {
+      """
+      class A {
+        var foo: B = new B
+        class B {
+          var bar: C = new C
+          class C {
+            var baz: D = new D
+            class D {
+              var test: Int = 0
+            }
+          }
+        }
+      }
+      """
+    }
+  }
+
+  it should testNr in {
     TestUtils.expectMutability("A", Utils.IsMutable) {
       """
-      class A(var foo: String)
+      object A {
+        var foo: String = "foo"
+      }
+      """
+    }
+  }
+
+  it should testNr in {
+    TestUtils.expectMutability("A", Utils.IsMutable) {
+      """
+      trait A {
+        var foo: String = "foo"
+      }
       """
     }
   }

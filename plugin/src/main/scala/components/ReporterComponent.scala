@@ -1,7 +1,7 @@
 package components
 
 import helpers.Utils
-import immutability.{Immutable, Mutable, ShallowImmutable}
+import immutability.{Immutable, MutabilityUnknown, Mutable, ShallowImmutable}
 
 import scala.collection.mutable.ListBuffer
 import scala.tools.nsc._
@@ -45,6 +45,11 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
         }
         case Immutable => {
           if (notifyTest(classSymbol.pos, classSymbol, Utils.IsDeeplyImmutable)) {
+            return
+          }
+        }
+        case MutabilityUnknown => {
+          if (notifyTest(classSymbol.pos, classSymbol, Utils.IsUnknownMutability)) {
             return
           }
         }

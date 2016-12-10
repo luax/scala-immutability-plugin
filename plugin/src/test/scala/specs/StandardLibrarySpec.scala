@@ -4,7 +4,7 @@ import helpers.Utils
 import org.scalatest._
 import utils.TestUtils
 
-class DevelopmentSpec extends FlatSpec {
+class StandardLibrarySpec extends FlatSpec {
 
   var i = 0
 
@@ -28,4 +28,5 @@ class DevelopmentSpec extends FlatSpec {
       """
     }
   }
+
 }

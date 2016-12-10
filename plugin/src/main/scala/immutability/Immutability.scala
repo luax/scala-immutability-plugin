@@ -10,7 +10,7 @@ case object ConditionallyImmutable extends Immutability
 
 case object ShallowImmutable extends Immutability
 
-case object PotentiallyImmutable extends Immutability
+case object MutabilityUnknown extends Immutability
 
 case object Immutable extends Immutability
 
