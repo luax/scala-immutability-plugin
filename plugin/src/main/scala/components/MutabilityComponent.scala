@@ -127,6 +127,9 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
               FalsePred
             }
           }, Some(MutabilityUnknown))
+
+          // Put next the current value of the cell
+          klassCompleter.putNext(assignedTypeCompleter.cell.getResult)
         }
       }
     }
