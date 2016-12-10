@@ -19,6 +19,8 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
 
   var classesWithVar: Set[Symbol] = Set()
   var classesWithVal: Set[Symbol] = Set()
+  var caseClasses: Set[Symbol] = Set()
+  var abstractClasses: Set[Symbol] = Set()
   var classes: Set[Symbol] = Set()
   var traits: Set[Symbol] = Set()
   var objects: Set[Symbol] = Set()
@@ -28,6 +30,10 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
   var assignmentWithoutCellCompleter: Set[Symbol] = Set()
 
   def numOfClasses = classes.size
+
+  def numOfCaseClasses = caseClasses.size
+
+  def numOfAbstractClasses = abstractClasses.size
 
   def numOfTraits = traits.size
 
@@ -46,12 +52,15 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     }
 
     def countClassDef(symbol: Symbol, mods: Modifiers): Unit = {
-
       if (symbol.isModuleClass) {
         objects += symbol
       } else {
         if (mods hasFlag Flag.TRAIT) {
           traits += symbol
+        } else if (mods hasFlag Flag.CASE) {
+          caseClasses += symbol
+        } else if (mods.hasFlag(Flag.ABSTRACT)) {
+          abstractClasses += symbol
         } else {
           classes += symbol
         }

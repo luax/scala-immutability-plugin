@@ -1,7 +1,6 @@
-package specs
+package specs.unit
 
-import helpers.Utils
-import immutability.{Immutability, Immutable, MutabilityUnknown, Mutable, KnownObjects}
+import immutability.{Immutable, KnownObjects, MutabilityUnknown, Mutable}
 import org.scalatest._
 
 class KnownObjectsSpec extends FlatSpec {

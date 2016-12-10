@@ -74,6 +74,8 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
 
         reporter.echo("Plugin ran successfully")
         reporter.echo("#classes found: " + scanComponent.numOfClasses)
+        reporter.echo("#case classes found: " + scanComponent.numOfCaseClasses)
+        reporter.echo("#abstract classes found: " + scanComponent.numOfAbstractClasses)
         reporter.echo("#traits found: " + scanComponent.numOfTraits)
         reporter.echo("#objects found: " + scanComponent.numOfObjects)
         reporter.echo("#templs found: " + scanComponent.numOfTempls)

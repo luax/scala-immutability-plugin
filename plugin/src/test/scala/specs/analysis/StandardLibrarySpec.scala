@@ -1,4 +1,4 @@
-package specs
+package specs.analysis
 
 import helpers.Utils
 import org.scalatest._
