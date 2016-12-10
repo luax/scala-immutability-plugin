@@ -24,6 +24,8 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
 
     def handleParent(parent: Type, klass: Symbol, klassCompleter: CellCompleter[ImmutabilityKey.type, Immutability]): Unit = {
       val parentCompleter = classToCellCompleter.getOrElse(parent.typeSymbol, null)
+      // TODO
+      // case class Leaf -> parent.typeSymbol = Serializable
       if (parentCompleter == null) {
         val mutability = KnownObjects.getMutability(parent.underlying.toString)
         klassCompleter.putNext(mutability)
@@ -62,18 +64,6 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
             }
           }, Some(ShallowImmutable))
         }
-      }
-    }
-
-    def forEachParentOfClass(klass: Symbol): Unit = {
-      val klassCompleter = classToCellCompleter.getOrElse(klass, null)
-      if (klassCompleter == null) {
-        classesWithoutCellCompleter += klass
-        Utils.log(s"DID NOT FIND A CELL COMPLETER FOR PARENT: $klass")
-        // TODO:
-        // String, Object is immutable etc
-      } else {
-        klass.tpe.parents.foreach(handleParent(_, klass, klassCompleter))
       }
     }
 
@@ -137,31 +127,39 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) => {
         val klass = cls.symbol
-        // Utils.log(s"Inspecting class: $klass")
-        forEachParentOfClass(klass)
+        if (!mods.hasFlag(SYNTHETIC)) {
+          val klassCompleter = classToCellCompleter.getOrElse(klass, null)
+          if (klassCompleter == null) {
+            classesWithoutCellCompleter += klass
+            Utils.log(s"DID NOT FIND A CELL COMPLETER FOR CLASS: $klass")
+          } else {
+            klass.tpe.parents.foreach(handleParent(_, klass, klassCompleter))
+          }
+        }
         traverse(impl)
       }
 
       case vd@ValDef(mods, name, tpt, rhs) => {
         val klass = vd.symbol.owner
-        // Utils.log(s"Inspecting vd: $vd")
-        if (klass.isClass) {
-          // The owner of the value defintion is a class
-          val klassCompleter = classToCellCompleter.getOrElse(klass, null)
-          if (klassCompleter == null) {
-            // TODO: When does this happen?
-            Utils.log(s"DID NOT FIND A CELL COMPLETER!!!: $klass, field: $vd")
-            classesWithoutCellCompleter += klass
-          } else {
-            if (mods.hasFlag(MUTABLE)) {
-              // It's a mutable value, e.g. "var x"
-              klassCompleter.putFinal(Mutable)
-            } else if (!mods.hasFlag(SYNTHETIC)) {
-              // It's an immutable values, e.g. "val x"
-              if (mods.hasFlag(LAZY)) {
-                classesWithLazyVals += klass
+        if (!mods.hasFlag(SYNTHETIC)) {
+          if (klass.isClass) {
+            // The owner of the value defintion is a class
+            val klassCompleter = classToCellCompleter.getOrElse(klass, null)
+            if (klassCompleter == null) {
+              // TODO: When does this happen?
+              Utils.log(s"DID NOT FIND A CELL COMPLETER!!!: $klass, field: $vd")
+              classesWithoutCellCompleter += klass
+            } else {
+              if (mods.hasFlag(MUTABLE)) {
+                // It's a mutable value, e.g. "var x"
+                klassCompleter.putFinal(Mutable)
+              } else {
+                // It's an immutable values, e.g. "val x"
+                if (mods.hasFlag(LAZY)) {
+                  classesWithLazyVals += klass
+                }
+                handleValAssignment(vd, klass, rhs, klassCompleter)
               }
-              handleValAssignment(vd, klass, rhs, klassCompleter)
             }
           }
         }

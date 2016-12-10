@@ -14,11 +14,13 @@ class DevelopmentSpec extends FlatSpec {
   }
 
   TestUtils.expectMutability(Map(List("Tree") -> Utils.IsDeeplyImmutable)) {
+    // TODO case object
     """
       sealed abstract class Tree
       case class Node(left: Tree, right: Tree) extends Tree
       case class Leaf[A](value: A) extends Tree
       case object EmptyLeaf extends Tree
+      case class Foo(var bajs: String) extends Tree
     """
   }
 

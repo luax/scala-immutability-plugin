@@ -79,8 +79,11 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) =>
         val symbol = cls.symbol
-        countClassDef(symbol, mods)
-        ensureCellCompleter(symbol)
+        if (!mods.hasFlag(SYNTHETIC)) {
+          // Symbol is not compiler-generated
+          countClassDef(symbol, mods)
+          ensureCellCompleter(symbol)
+        }
         traverse(impl)
 
       case templ@Template(parents, self, body) =>
@@ -89,9 +92,11 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
         body.foreach(t => traverse(t))
 
       case vd@ValDef(mods, name, tpt, rhs) =>
-        if (vd.symbol.owner.isClass) {
-          val klass = vd.symbol.owner
-          countClassWith(klass, mods)
+        if (!mods.hasFlag(SYNTHETIC)) {
+          if (vd.symbol.owner.isClass) {
+            val klass = vd.symbol.owner
+            countClassWith(klass, mods)
+          }
         }
         traverse(rhs)
       case _ =>

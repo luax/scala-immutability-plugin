@@ -1,4 +1,6 @@
-package mutables;
+package mutables
+
+;
 
 import scala.collection.mutable.ArrayBuffer
 

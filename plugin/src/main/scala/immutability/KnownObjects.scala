@@ -1,7 +1,5 @@
 package immutability
 
-import helpers.Utils
-
 object KnownObjects {
 
   val NoType = "<notype>"
@@ -27,7 +25,7 @@ object KnownObjects {
     "List" //  List is an alias for scala.collection.immutable.List.
   )
 
-  val ConditionallyImmutable = Set( // TODO:
+  val ConditionallyImmutable = Set(// TODO:
     "List",
     "Seq"
   )
