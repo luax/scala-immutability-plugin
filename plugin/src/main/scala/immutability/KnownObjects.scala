@@ -22,7 +22,9 @@ object KnownObjects {
     "ScalaObject",
     "Null",
     "Nothing",
-    "List" //  List is an alias for scala.collection.immutable.List.
+    "List", //  List is an alias for scala.collection.immutable.List.
+    "Serializable", // For case classes
+    "Product" // For case classes and objects
   )
 
   val ConditionallyImmutable = Set(// TODO:
