@@ -34,7 +34,8 @@ lazy val plugin = (project in file("plugin")).
     libraryDependencies += ("org.scala-lang" % "scala-library" % scalaVersion.value),
     libraryDependencies += ("org.scala-lang" % "scala-compiler" % scalaVersion.value),
     libraryDependencies ++= backendDeps,
-    assemblyJarName in assembly := pluginAssemblyJarName
+    assemblyJarName in assembly := pluginAssemblyJarName,
+    test in assembly := {} // Don't run any tests when "assembly"
   )
 
 lazy val demo = (project in file("demo")).

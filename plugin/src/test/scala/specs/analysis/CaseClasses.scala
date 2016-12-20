@@ -135,7 +135,7 @@ class CaseClasses extends FlatSpec {
       """
     }
 
-    TestUtils.expectMutability(Map(List("EmptyLeaf") -> Utils.IsDeeplyImmutable, List("Tree", "Node", "EmptyLeaf", "Leaf", "Foo") -> Utils.IsMutable)) {
+    TestUtils.expectMutability(Map(List("EmptyLeaf") -> Utils.IsDeeplyImmutable, List("Tree", "Node", "Leaf", "Foo") -> Utils.IsMutable)) {
       """
       sealed class Tree {
         var mutable: String = "foo"

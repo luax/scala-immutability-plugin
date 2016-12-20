@@ -132,4 +132,21 @@ class ImmutableSpec extends FlatSpec {
       """
     }
   }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("JavaConversions", "convert") -> Utils.IsDeeplyImmutable)) {
+      """
+      trait LowPriorityWrapAsScala
+      trait LowPriorityWrapAsJava
+      trait WrapAsScala extends LowPriorityWrapAsScala
+      trait WrapAsJava extends LowPriorityWrapAsJava
+      object JavaConversions extends WrapAsScala with WrapAsJava
+      object convert {
+        val wrapAsJava = new WrapAsJava {
+
+        }
+      }
+      """
+    }
+  }
 }

@@ -6,7 +6,7 @@ sealed trait Immutability
 
 case object Mutable extends Immutability
 
-case object ConditionallyImmutable extends Immutability
+// case object ConditionallyImmutable extends Immutability
 
 case object ShallowImmutable extends Immutability
 
@@ -26,7 +26,8 @@ object Immutability {
     }
 
     def <=(lhs: Immutability, rhs: Immutability): Boolean = {
-      lhs == rhs || lhs == Immutable || ((lhs == ConditionallyImmutable || lhs == ShallowImmutable) && rhs != Immutable)
+      lhs == rhs || lhs == Immutable || (lhs == ShallowImmutable && rhs != Immutable)
+      // lhs == rhs || lhs == Immutable || ((lhs == ConditionallyImmutable || lhs == ShallowImmutable) && rhs != Immutable)
     }
 
     override def empty: Immutability = Immutable

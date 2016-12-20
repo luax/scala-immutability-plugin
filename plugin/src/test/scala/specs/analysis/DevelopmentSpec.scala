@@ -1,8 +1,6 @@
 package specs.analysis
 
-import helpers.Utils
 import org.scalatest._
-import utils.TestUtils
 
 class DevelopmentSpec extends FlatSpec {
 
@@ -13,25 +11,48 @@ class DevelopmentSpec extends FlatSpec {
     i.toString
   }
 
-  // http://stackoverflow.com/questions/36525804/scala-case-class-extending-product-with-serializable
-  TestUtils.expectMutability(Map(List("Tree", "Node", "EmptyLeaf") -> Utils.IsDeeplyImmutable, List("Foo", "Leaf") -> Utils.IsMutable)) {
-    // TODO case object
-    """
-      sealed abstract class Tree
-      case class Node(left: Tree, right: Tree) extends Tree
-      case class Leaf[A](var value: A) extends Tree // CONDITIONALLY
-      case object EmptyLeaf extends Tree
-      case class Foo(var bajs: String) extends Tree
-    """
-  }
+  //  it should testNr in {
+  //    TestUtils.expectMutability(Map(List("Implementation") -> Utils.IsShallowImmutable, List("Mutable") -> Utils.IsMutable)) {
+  //      """
+  //      type T = Mutable
+  //
+  //      class Implementation {
+  //        val t: T = new T
+  //      }
+  //
+  //      class Mutable {
+  //        var foo: String = "mutable"
+  //      }
+  //      """
+  //    }
+  //  }
+  //
+  //  class Implementation {
+  //    val t: String = "foo"
+  //  }
+  //
+  //  var f = Seq("1", "2")
+  //
+  //
+  //  it should testNr in {
+  //    TestUtils.expectMutability(Map(List("Implementation") -> Utils.IsDeeplyImmutable)) {
+  //      """
+  //      class Implementation {
+  //        val t =  Seq("1", "2", "3")
+  //        // val f: StringBuilder = null
+  //      }
+  //      """
+  //    }
+  //  }
 
-  //  * Conditionally immutable means that the state of the instance of the respective class
-  // * cannot be mutated, but objects referenced by it can be mutated (so called
-  //   * immutable collections are typically rated as "conditionally immutable")
-
-  // List[String] --> Immutable
-  // List[Object] --> ConditionallyImmutable
-
-
-  // List[String] --> Immutable
+  //
+  //  it should testNr in {
+  //    TestUtils.expectMutability(Map(List("Implementation") -> Utils.IsDeeplyImmutable)) {
+  //      """
+  //      trait Implementation {
+  //        var a =  Seq("1", "2", "3")
+  //      }
+  //      """
+  //    }
+  //  }
 }

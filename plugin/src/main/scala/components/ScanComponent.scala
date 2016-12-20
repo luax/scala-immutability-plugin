@@ -17,32 +17,42 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
 
   var compilationUnitToCellCompleters = Map[CompilationUnit, Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]]]()
 
-  var classesWithVar: Set[Symbol] = Set()
-  var classesWithVal: Set[Symbol] = Set()
-  var caseClasses: Set[Symbol] = Set()
-  var abstractClasses: Set[Symbol] = Set()
-  var classes: Set[Symbol] = Set()
-  var traits: Set[Symbol] = Set()
-  var objects: Set[Symbol] = Set()
-  var templates: Set[Symbol] = Set()
+  var classesWithVar: Set[Symbol] = null
+  var classesWithVal: Set[Symbol] = null
+  var classesWithLazyVals: Set[Symbol] = null
+  var caseClasses: Set[Symbol] = null
+  var abstractClasses: Set[Symbol] = null
+  var classes: Set[Symbol] = null
+  var traits: Set[Symbol] = null
+  var objects: Set[Symbol] = null
+  var templates: Set[Symbol] = null
+  var classesWithoutCellCompleter: Set[Symbol] = null
+  var assignmentWithoutCellCompleter: Set[Symbol] = null
 
-  var classesWithoutCellCompleter: Set[Symbol] = Set()
-  var assignmentWithoutCellCompleter: Set[Symbol] = Set()
+  def initializeFields(): Unit = {
+    compilationUnitToCellCompleters = Map[CompilationUnit, Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]]]()
+    classesWithVar = Set()
+    classesWithVal = Set()
+    classesWithLazyVals = Set()
+    caseClasses = Set()
+    abstractClasses = Set()
+    classes = Set()
+    traits = Set()
+    objects = Set()
+    templates = Set()
+    classesWithoutCellCompleter = Set()
+    assignmentWithoutCellCompleter = Set()
+  }
 
-  def numOfClasses = classes.size
-
-  def numOfCaseClasses = caseClasses.size
-
-  def numOfAbstractClasses = abstractClasses.size
-
-  def numOfTraits = traits.size
-
-  def numOfObjects = objects.size
-
-  def numOfTempls = templates.size
+  initializeFields()
 
   class UnitContentTraverser extends Traverser {
     var classToCellCompleter: Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]] = Map()
+
+    def compilerGenerated(mods: Modifiers): Boolean = {
+      // Symbol is compiler-generated
+      mods.hasFlag(SYNTHETIC)
+    }
 
     def ensureCellCompleter(symbol: Symbol): Unit = {
       if (classToCellCompleter.get(symbol) != null) {
@@ -71,7 +81,7 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
       // TODO lazy val
       if (mods.hasFlag(MUTABLE)) {
         classesWithVar += klass
-      } else if (!mods.hasFlag(SYNTHETIC)) {
+      } else if (!compilerGenerated(mods)) {
         classesWithVal += klass
       }
     }
@@ -79,7 +89,8 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) =>
         val symbol = cls.symbol
-        if (!mods.hasFlag(SYNTHETIC)) {
+        if (!compilerGenerated(mods) && !cls.symbol.isAnonymousClass) {
+          // TODO: Anonymous class
           // Symbol is not compiler-generated
           countClassDef(symbol, mods)
           ensureCellCompleter(symbol)
@@ -96,6 +107,11 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
           if (vd.symbol.owner.isClass) {
             val klass = vd.symbol.owner
             countClassWith(klass, mods)
+
+            // Lazy
+            if (mods.hasFlag(LAZY)) {
+              classesWithLazyVals += klass
+            }
           }
         }
         traverse(rhs)
@@ -110,14 +126,13 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
    */
   class FirstPhase(prev: Phase) extends StdPhase(prev) {
     override def apply(unit: CompilationUnit): Unit = {
+      if (Utils.isScalaTest) {
+        // If in test, overwrite fields for each compilation unit
+        initializeFields()
+      }
       val unitContentTraverser = new UnitContentTraverser()
       unitContentTraverser.traverse(unit.body)
-      if (Utils.isScalaTest) {
-        // If in test, overwrite map for each compilation unit
-        compilationUnitToCellCompleters = Map(unit -> unitContentTraverser.classToCellCompleter)
-      } else {
-        compilationUnitToCellCompleters += unit -> unitContentTraverser.classToCellCompleter
-      }
+      compilationUnitToCellCompleters += unit -> unitContentTraverser.classToCellCompleter
     }
   }
 

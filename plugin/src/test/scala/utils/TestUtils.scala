@@ -10,7 +10,6 @@ import scala.reflect.runtime.{universe => ru}
 import scala.tools.reflect.{ToolBox, ToolBoxError};
 
 object TestUtils extends FlatSpec with Matchers {
-
   val cl = getClass.getClassLoader.asInstanceOf[URLClassLoader]
   val cp = cl.getURLs.map(_.getFile).mkString(File.pathSeparator)
   val pluginPath = cp
@@ -38,12 +37,5 @@ object TestUtils extends FlatSpec with Matchers {
       expectMutability(klasses, immutabilityMessage)(code)
     }
   }
-
-
-  // TODO: Did not catch any output except errors maybe remove this code:
-  //  def expect(message: String)(code: String): Unit = {
-  //    val output = tb.eval(tb.parse(code)).toString
-  //    output should include(message)
-  //  }
 }
 

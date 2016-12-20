@@ -1,6 +1,7 @@
 package specs.unit
 
-import immutability.{Immutable, KnownObjects, MutabilityUnknown, Mutable}
+import immutability.{Immutable, KnownObjects, Mutable, MutabilityUnknown}
+
 import org.scalatest._
 
 class KnownObjectsSpec extends FlatSpec {
@@ -20,5 +21,15 @@ class KnownObjectsSpec extends FlatSpec {
 
   it should "return unknown" in {
     assert(KnownObjects.getMutability("Foo bar") == MutabilityUnknown)
+  }
+
+  it should "extract base class" in {
+    assert(KnownObjects.extractBaseClass("scala.collection.mutable.ArrayBuffer[String]") == "scala.collection.mutable.ArrayBuffer")
+    assert(KnownObjects.extractBaseClass("scala.collection.mutable.ArrayBuffer[String, Int]") == "scala.collection.mutable.ArrayBuffer")
+    assert(KnownObjects.extractBaseClass("scala.collection.mutable.ArrayBuffer[String, Int, Long]") == "scala.collection.mutable.ArrayBuffer")
+    assert(KnownObjects.extractBaseClass("List[String]") == "List")
+    assert(KnownObjects.extractBaseClass("List[String, Double]") == "List")
+    assert(KnownObjects.extractBaseClass("List") == "List")
+    assert(KnownObjects.extractBaseClass("scala.collection.mutable.ArrayBuffer") == "scala.collection.mutable.ArrayBuffer")
   }
 }

@@ -161,4 +161,50 @@ class ShallowImmutableSpec extends FlatSpec {
       """
     }
   }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Test") -> Utils.IsDeeplyImmutable)) {
+      """
+        class A {}
+        class Test {
+          val fn = new A
+        }
+      """
+    }
+
+    TestUtils.expectMutability(Map(List("Test") -> Utils.IsShallowImmutable, List("A") -> Utils.IsMutable)) {
+      """
+      class A {
+        var foo: String = null
+      }
+      class Test {
+        val fn = new A
+      }
+      """
+    }
+  }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Test", "Foo") -> Utils.IsShallowImmutable)) {
+      """
+      case class Foo[A, B](f: A => B) {
+        println(f)
+        def print1 {
+          println("1")
+        }
+      }
+
+      object Test {
+
+        val f1 = Foo {
+          println("hello from the `f1` instance")
+          "this is the result of the block of code"
+        }
+
+        f1.print1
+
+      }
+      """
+    }
+  }
 }

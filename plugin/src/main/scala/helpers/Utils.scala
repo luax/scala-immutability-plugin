@@ -15,7 +15,6 @@ object Utils {
   val IsMutable = "mutable"
   val IsShallowImmutable = "shallow immutable"
   val IsDeeplyImmutable = "deep immutable"
-  val IsUnknownMutability = "immutability unknown"
 
   def log(msg: => String): Unit = {
     if (LoggingEnabled) {

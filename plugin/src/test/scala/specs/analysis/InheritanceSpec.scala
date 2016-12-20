@@ -282,4 +282,29 @@ class InheritanceSpec extends FlatSpec {
       """
     }
   }
+
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Foo", "B") -> Utils.IsMutable, List("Bar", "A", "Baz") -> Utils.IsDeeplyImmutable)) {
+      """
+      trait Foo {
+        var mutable: String
+      }
+
+      trait Bar {
+        val immutable: String
+      }
+
+      trait Baz {
+        val notShallow: Foo // Deep since it cannot be initialized
+      }
+
+      class A {
+      }
+
+      abstract class B extends A with Foo {
+      }
+      """
+    }
+  }
+
 }
