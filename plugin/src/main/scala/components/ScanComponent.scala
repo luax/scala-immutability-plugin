@@ -91,7 +91,6 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
         val symbol = cls.symbol
         if (!compilerGenerated(mods) && !cls.symbol.isAnonymousClass) {
           // TODO: Anonymous class
-          // Symbol is not compiler-generated
           countClassDef(symbol, mods)
           ensureCellCompleter(symbol)
         }

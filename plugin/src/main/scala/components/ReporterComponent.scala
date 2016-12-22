@@ -32,7 +32,6 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
   def notifyTest(): Unit = {
     for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
       val classSymbol = klass.asInstanceOf[Symbol]
-      println(classSymbol, v.cell.getResult)
       v.cell.getResult match {
         case Mutable => {
           if (notifyTest(classSymbol.pos, classSymbol, Utils.IsMutable)) {
@@ -81,49 +80,42 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     print("#objects found: " + scanComponent.objects.size)
     print("#templs found: " + scanComponent.templates.size) // TODO
     print("-")
-
-
     print("Fields")
     print("#classes with var: " + scanComponent.classesWithVar.size)
-    print(scanComponent.classesWithVar.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
     print("#classes with val: " + scanComponent.classesWithVal.size)
-    print(scanComponent.classesWithVal.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
-
     val classesWithOnlyVal = scanComponent.classesWithVal -- scanComponent.classesWithVar
     print("#classes with only val: " + classesWithOnlyVal.size)
-    print(classesWithOnlyVal.foldLeft("") { (r, s) => r + "[" + s + "]" + " " })
     print("-")
 
-
-
+    // TODO: Clean up
     // module (object)
     // trait
     // case
     // abstract
     // class
-    var mutableObjects: List[Symbol] = List()
-    var mutableTraits: List[Symbol] = List()
-    var mutableCaseClasses: List[Symbol] = List()
-    var mutableAbstractClasses: List[Symbol] = List()
-    var mutableClasses: List[Symbol] = List()
+    var mutableObjects: List[mutabilityComponent.global.Symbol] = List()
+    var mutableTraits: List[mutabilityComponent.global.Symbol] = List()
+    var mutableCaseClasses: List[mutabilityComponent.global.Symbol] = List()
+    var mutableAbstractClasses: List[mutabilityComponent.global.Symbol] = List()
+    var mutableClasses: List[mutabilityComponent.global.Symbol] = List()
 
-    var shallowImmutableObjects: List[Symbol] = List()
-    var shallowImmutableTraits: List[Symbol] = List()
-    var shallowImmutableCaseClasses: List[Symbol] = List()
-    var shallowImmutableAbstractClasses: List[Symbol] = List()
-    var shallowImmutableClasses: List[Symbol] = List()
+    var shallowImmutableObjects: List[mutabilityComponent.global.Symbol] = List()
+    var shallowImmutableTraits: List[mutabilityComponent.global.Symbol] = List()
+    var shallowImmutableCaseClasses: List[mutabilityComponent.global.Symbol] = List()
+    var shallowImmutableAbstractClasses: List[mutabilityComponent.global.Symbol] = List()
+    var shallowImmutableClasses: List[mutabilityComponent.global.Symbol] = List()
 
-    var immutableObjects: List[Symbol] = List()
-    var immutableTraits: List[Symbol] = List()
-    var immutableCaseClasses: List[Symbol] = List()
-    var immutableAbstractClasses: List[Symbol] = List()
-    var immutableClasses: List[Symbol] = List()
+    var immutableObjects: List[mutabilityComponent.global.Symbol] = List()
+    var immutableTraits: List[mutabilityComponent.global.Symbol] = List()
+    var immutableCaseClasses: List[mutabilityComponent.global.Symbol] = List()
+    var immutableAbstractClasses: List[mutabilityComponent.global.Symbol] = List()
+    var immutableClasses: List[mutabilityComponent.global.Symbol] = List()
 
     for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
       val immutability = v.cell.getResult
       if (immutability == Mutable) {
 
-        val k = klass.asInstanceOf[Symbol]
+        val k = klass.asInstanceOf[mutabilityComponent.global.Symbol]
         if (k.isModuleClass) {
           mutableObjects ::= k
         } else {
@@ -138,7 +130,7 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
           }
         }
       } else if (immutability == Immutable) {
-        val k = klass.asInstanceOf[Symbol]
+        val k = klass.asInstanceOf[mutabilityComponent.global.Symbol]
         if (k.isModuleClass) {
           immutableObjects ::= k
         } else {
@@ -153,7 +145,7 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
           }
         }
       } else if (immutability == ShallowImmutable) {
-        val k = klass.asInstanceOf[Symbol]
+        val k = klass.asInstanceOf[mutabilityComponent.global.Symbol]
         if (k.isModuleClass) {
           shallowImmutableObjects ::= k
         } else {
@@ -170,11 +162,6 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
       }
     }
 
-    // module (object)
-    // trait
-    // case
-    // abstract
-    // class
     print("#mutable objects: " + mutableObjects.size)
     printCollection(mutableObjects)
 
@@ -191,7 +178,6 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     printCollection(mutableClasses)
     print("-")
 
-    //////////////
     print("#shallow objects: " + shallowImmutableObjects.size)
     printCollection(shallowImmutableObjects)
 
@@ -208,7 +194,6 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     printCollection(shallowImmutableClasses)
     print("-")
 
-    ////////
     print("#immutable objects: " + immutableObjects.size)
     printCollection(immutableObjects)
 
@@ -227,9 +212,9 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
 
     print("-")
     print("#classes without cell completer: ")
-    printCollection(mutabilityComponent.classesWithoutCellCompleter.toList.asInstanceOf[List[Symbol]])
+    printCollection(mutabilityComponent.classesWithoutCellCompleter.toList.asInstanceOf[List[mutabilityComponent.global.Symbol]])
     print("#assignments without cell completer: ")
-    printCollection(mutabilityComponent.assignmentWithoutCellCompleter.toList.asInstanceOf[List[Symbol]])
+    printCollection(mutabilityComponent.assignmentWithoutCellCompleter.toList.asInstanceOf[List[mutabilityComponent.global.Symbol]])
     print("-")
 
     print("What is the percentage of classes/traits that are shallow/deep immutable?")
@@ -257,6 +242,9 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     println(mutabilityComponent.reasons)
     print("Java")
     println(KnownObjects.JavaClassesUsed)
+
+    print("ImmutableTypes")
+    println(KnownObjects.ImmutableTypes)
   }
 
   def print(msg: String): Unit = {
@@ -267,8 +255,15 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     }
   }
 
-  def printCollection(list: List[Symbol]): Unit = {
-    print(list.foldLeft("") { (r, s) => r + "[(" + s + "," + s.tpe.underlying + ")]" + " " })
+  def printCollection(list: List[mutabilityComponent.global.Symbol]): Unit = {
+    println(list.map((s) => {
+      val c = mutabilityComponent.classToCellCompleter.getOrElse(s, null)
+      if (c == null) {
+        s.fullName + " => " + "no_cell_completer"
+      } else {
+        s.fullName + " => " + c.cell.getResult() + " ( " + mutabilityComponent.reasons.getOrElse(s, null) + " )"
+      }
+    }).sorted.mkString("\n"))
   }
 
   override def newPhase(prev: Phase): StdPhase = new NewPhase(prev)

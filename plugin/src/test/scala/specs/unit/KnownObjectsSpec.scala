@@ -9,9 +9,9 @@ class KnownObjectsSpec extends FlatSpec {
   it should "return immutable" in {
     assert(KnownObjects.getMutability("scala.collection.immutable.HashMap[Int,String]") == Immutable)
     assert(KnownObjects.getMutability("scala.collection.immutable.HashMap[String]") == Immutable)
-    assert(KnownObjects.getMutability("String") == Immutable)
-    assert(KnownObjects.getMutability("List") == Immutable)
-    assert(KnownObjects.getMutability("Int") == Immutable)
+    assert(KnownObjects.getMutability("scala.String") == Immutable)
+    assert(KnownObjects.getMutability("scala.List") == Immutable)
+    assert(KnownObjects.getMutability("scala.Int") == Immutable)
     assert(KnownObjects.getMutability("<notype>") == Immutable) // TODO: Unknown?
   }
 

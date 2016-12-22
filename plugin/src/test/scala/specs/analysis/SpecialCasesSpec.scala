@@ -14,4 +14,28 @@ class SpecialCasesSpec extends FlatSpec {
     }
   }
 
+  it should "Ordered" in {
+    TestUtils.expectMutability(Map(List("Ordered") -> Utils.IsDeeplyImmutable)) {
+      """
+      trait Ordered[A] extends Any with java.lang.Comparable[A] {
+      }
+      """
+    }
+  }
+
+  it should "Immutable" in {
+    TestUtils.expectMutability(Map(List("Ordered") -> Utils.IsDeeplyImmutable)) {
+      """
+      trait Ordered[A] extends Any with java.lang.Comparable[A] {
+      }
+      """
+    }
+//
+//    scala.collection.immutable.Vector
+//
+//    private[immutable] trait VectorPointer[T] {
+//      private[immutable] var depth: Int = _
+//    }
+  }
+
 }
