@@ -4,6 +4,7 @@ import cell.CellCompleter
 import helpers.Utils
 import immutability._
 
+import scala.collection.mutable._
 import scala.tools.nsc.plugins.{PluginComponent => NscPluginComponent}
 import scala.tools.nsc.{Global, Phase}
 
@@ -15,19 +16,20 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
 
   override val runsAfter = List(runsAfterPhase)
 
-  var compilationUnitToCellCompleters = Map[CompilationUnit, Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]]]()
-
-  var classesWithVar: Set[Symbol] = null
-  var classesWithVal: Set[Symbol] = null
-  var classesWithLazyVals: Set[Symbol] = null
-  var caseClasses: Set[Symbol] = null
-  var abstractClasses: Set[Symbol] = null
-  var classes: Set[Symbol] = null
-  var traits: Set[Symbol] = null
-  var objects: Set[Symbol] = null
-  var templates: Set[Symbol] = null
-  var classesWithoutCellCompleter: Set[Symbol] = null
-  var assignmentWithoutCellCompleter: Set[Symbol] = null
+  var compilationUnitToCellCompleters: Map[CompilationUnit, Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]]] = _
+  var classesWithVar: Set[Symbol] = _
+  var classesWithVal: Set[Symbol] = _
+  var classesWithLazyVals: Set[Symbol] = _
+  var caseClasses: Set[Symbol] = _
+  var abstractClasses: Set[Symbol] = _
+  var classes: Set[Symbol] = _
+  var traits: Set[Symbol] = _
+  var objects: Set[Symbol] = _
+  var templates: Set[Symbol] = _
+  var classesWithoutCellCompleter: Set[Symbol] = _
+  var assignmentWithoutCellCompleter: Set[Symbol] = _
+  var classesThatExtendWithTypeArguments: Map[Symbol, Set[Type]] = _
+  var classesThatHaveFieldsWithTypeArguments: Map[Symbol, Set[Type]] = _
 
   def initializeFields(): Unit = {
     compilationUnitToCellCompleters = Map[CompilationUnit, Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]]]()
@@ -42,9 +44,13 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     templates = Set()
     classesWithoutCellCompleter = Set()
     assignmentWithoutCellCompleter = Set()
+    classesThatExtendWithTypeArguments = Map[Symbol, Set[Type]]()
+    classesThatHaveFieldsWithTypeArguments = Map[Symbol, Set[Type]]()
   }
 
   initializeFields()
+
+  override def newPhase(prev: Phase): StdPhase = new FirstPhase(prev)
 
   class UnitContentTraverser extends Traverser {
     var classToCellCompleter: Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]] = Map()
@@ -78,8 +84,9 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     }
 
     def countClassWith(klass: Symbol, mods: Modifiers): Unit = {
-      // TODO lazy val
-      if (mods.hasFlag(MUTABLE)) {
+      if (mods.hasFlag(LAZY)) {
+        classesWithLazyVals += klass
+      } else if (mods.hasFlag(MUTABLE)) {
         classesWithVar += klass
       } else if (!compilerGenerated(mods)) {
         classesWithVal += klass
@@ -89,10 +96,23 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) =>
         val symbol = cls.symbol
-        if (!compilerGenerated(mods) && !cls.symbol.isAnonymousClass) {
+        if (!compilerGenerated(mods)) {
+          // && !cls.symbol.isAnonymousClass) {
           // TODO: Anonymous class
           countClassDef(symbol, mods)
           ensureCellCompleter(symbol)
+
+          // Check if this class extends  a class with any type argument
+          symbol.tpe.parents.foreach(parent => {
+            if (parent.typeArgs.nonEmpty) {
+              classesThatExtendWithTypeArguments.get(symbol) match {
+                case Some(set) =>
+                  set += parent
+                case _ =>
+                  classesThatExtendWithTypeArguments += (symbol -> Set(parent))
+              }
+            }
+          })
         }
         traverse(impl)
 
@@ -102,14 +122,18 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
         body.foreach(t => traverse(t))
 
       case vd@ValDef(mods, name, tpt, rhs) =>
-        if (!mods.hasFlag(SYNTHETIC)) {
-          if (vd.symbol.owner.isClass) {
-            val klass = vd.symbol.owner
+        if (!compilerGenerated(mods)) {
+          val klass = vd.symbol.owner
+          if (klass.isClass) {
             countClassWith(klass, mods)
-
-            // Lazy
-            if (mods.hasFlag(LAZY)) {
-              classesWithLazyVals += klass
+            // If field has any type args
+            if (rhs.tpe.typeArgs.nonEmpty) {
+              classesThatHaveFieldsWithTypeArguments.get(klass) match {
+                case Some(set) =>
+                  set += rhs.tpe
+                case _ =>
+                  classesThatHaveFieldsWithTypeArguments += (klass -> Set(rhs.tpe))
+              }
             }
           }
         }
@@ -128,12 +152,12 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
       if (Utils.isScalaTest) {
         // If in test, overwrite fields for each compilation unit
         initializeFields()
+      } else {
+        Utils.log(s"Scanning compilation unit: '${unit}'")
       }
       val unitContentTraverser = new UnitContentTraverser()
       unitContentTraverser.traverse(unit.body)
       compilationUnitToCellCompleters += unit -> unitContentTraverser.classToCellCompleter
     }
   }
-
-  override def newPhase(prev: Phase): StdPhase = new FirstPhase(prev)
 }

@@ -16,14 +16,10 @@ object TestUtils extends FlatSpec with Matchers {
   val mirror = ru.runtimeMirror(cl)
   val tb = mirror.mkToolBox(options = s"-Dmsg=hello -cp $cp -Xplugin:$cp") // TODO: Might have to extract plugin path instead of passing in all class paths
 
-  def expectMutability(klass: String, immutabilityMessage: String)(code: String) {
-    val mutabilityMessage = Utils.mutabilityMessage(klass, immutabilityMessage)
-    Utils.setCurrentTestMessage(mutabilityMessage)
-    val e = intercept[ToolBoxError] {
-      // Intercept a false negative error to notify that the test was successful
-      tb.eval(tb.parse(code))
+  def expectMutability(klassesToImmutability: Map[List[String], String])(code: String): Unit = {
+    for ((klasses, immutabilityMessage) <- klassesToImmutability) {
+      expectMutability(klasses, immutabilityMessage)(code)
     }
-    e.getMessage should include(mutabilityMessage)
   }
 
   def expectMutability(klasses: List[String], immutabilityMessage: String)(code: String) {
@@ -32,10 +28,14 @@ object TestUtils extends FlatSpec with Matchers {
     }
   }
 
-  def expectMutability(klassesToImmutability: Map[List[String], String])(code: String): Unit = {
-    for ((klasses, immutabilityMessage) <- klassesToImmutability) {
-      expectMutability(klasses, immutabilityMessage)(code)
+  def expectMutability(klass: String, immutabilityMessage: String)(code: String) {
+    val mutabilityMessage = Utils.mutabilityMessage(klass, immutabilityMessage)
+    Utils.setCurrentTestMessage(mutabilityMessage)
+    val e = intercept[ToolBoxError] {
+      // Intercept a false negative error to notify that the test was successful
+      tb.eval(tb.parse(code))
     }
+    e.getMessage should include(mutabilityMessage)
   }
 }
 

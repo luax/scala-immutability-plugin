@@ -11,14 +11,28 @@ object Utils {
   private val scalaTestClassPathFound = getClass.getClassLoader.asInstanceOf[URLClassLoader].getURLs.map(_.getFile).mkString(File.pathSeparator).contains(ScalaTestPattern)
 
   val TestExpectedMessagePropertyStr = "plugin.test.expected.message"
-
   val IsMutable = "mutable"
   val IsShallowImmutable = "shallow immutable"
   val IsDeeplyImmutable = "deep immutable"
+  val IsConditionallyImmutable = "conditionally immutable"
+
+  // Treat private var as "val"
+  val AllowPrivateVar = false
+  if (AllowPrivateVar) {
+    println(s"NOTE: Private var is treated as val (not assigned mutable)")
+  }
+
+  // Assume that certain types are immutable/mutable e.g., "scala.collection.immutable.list" is immutable.
+  val MakeAssumptionAboutTypes = true
+  if (MakeAssumptionAboutTypes) {
+    println(s"NOTE: Assuming that certain types are immutable/mutable e.g., 'scala.collection.immutable.list' is immutable")
+  }
+
+  private var pool: HandlerPool = _
 
   def log(msg: => String): Unit = {
     if (LoggingEnabled) {
-      println(msg)
+      println(s"[log] ${msg}")
     }
   }
 
@@ -30,16 +44,14 @@ object Utils {
 
   def isScalaTest = scalaTestClassPathFound
 
-  private var pool: HandlerPool = null
-
-  def newPool = {
-    pool = new HandlerPool()
-  }
-
   def getPool: HandlerPool = {
     if (pool == null) {
       newPool
     }
     pool
+  }
+
+  def newPool = {
+    pool = new HandlerPool()
   }
 }

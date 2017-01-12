@@ -4,6 +4,7 @@ import cell.{CellCompleter, FalsePred, WhenNext, WhenNextComplete}
 import helpers.Utils
 import immutability._
 
+import scala.collection.mutable.Set
 import scala.tools.nsc.plugins.{PluginComponent => NscPluginComponent}
 import scala.tools.nsc.{Global, Phase}
 
@@ -13,8 +14,6 @@ case object ParentClassContext extends ClassContext
 
 case object ValDefinitionContext extends ClassContext
 
-case object ClassTypeParameterContext extends ClassContext
-
 class MutabilityComponent(val global: Global, val phaseName: String, val runsAfterPhase: String, val scanComponent: ScanComponent) extends NscPluginComponent {
 
   import global._
@@ -22,23 +21,64 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
   import reflect.internal.Flags._
 
   override val runsAfter = List(runsAfterPhase)
-
-  var classToCellCompleter: Map[global.Symbol, CellCompleter[ImmutabilityKey.type, Immutability]] = Map()
+  val PARENT_WAS_MUTABLE_ASSUMPTION = "Parent was mutable (assumption)"
+  val PARENT_WAS_MUTABLE = "Parent was mutable"
+  val FIELD_HAS_VAR_PUBLIC = "Field contained 'var' (public)"
+  val FIELD_HAS_VAR_PRIVATE = "Field contained 'var' (private)"
+  val PARENT_WAS_UNKNOWN = "Parent was unknown"
+  val PARENT_WAS_SHALLOW = "Parent was shallow immutable"
+  val VAL_FIELD_REFERS_TO_UNKNOWN = "Field with 'val' refers to unknown typ"
+  val VAL_FIELD_REFERS_TO_MUTABLE = "Field with 'val' refers to mutable type"
+  val VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION = "Field with 'val' refers to mutable type (assumption)"
+  val VAL_FIELD_REFERS_TO_SHALLOW = "Field with 'val' refers to shallow type"
+  val REASONS_MAPPING = Map(
+    PARENT_WAS_MUTABLE_ASSUMPTION -> "A",
+    PARENT_WAS_MUTABLE -> "B",
+    FIELD_HAS_VAR_PUBLIC -> "C",
+    FIELD_HAS_VAR_PRIVATE -> "D",
+    PARENT_WAS_UNKNOWN -> "E",
+    PARENT_WAS_SHALLOW -> "F",
+    VAL_FIELD_REFERS_TO_UNKNOWN -> "G",
+    VAL_FIELD_REFERS_TO_MUTABLE -> "H",
+    VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION -> "I",
+    VAL_FIELD_REFERS_TO_SHALLOW -> "J"
+  )
+  var classToCellCompleter: Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]] = Map()
   var cellCompleterToClass: Map[CellCompleter[ImmutabilityKey.type, Immutability], Symbol] = Map()
-
   var classesWithoutCellCompleter: Set[Symbol] = Set()
   var assignmentWithoutCellCompleter: Set[Symbol] = Set()
+  var ImmutabilityReasons = Map[Symbol, Symbol]()
+  var ImmutabilityReasonsMutable = Map[Symbol, Set[String]]()
+  var ImmutabilityReasonsShallow = Map[Symbol, Set[String]]()
 
-  var reasons = Map[Symbol, Symbol]()
+  override def newPhase(prev: Phase): StdPhase = new FirstPhase(prev)
 
   class MutabilityTraverser() extends Traverser {
 
-    def addImmutabilityReason(gotImmutability: Symbol, fromImmutability: Symbol): Unit = {
+    def addImmutabilityReason(gotImmutability: Symbol, fromImmutability: Symbol, immutability: Immutability, reason: String): Unit = {
       if (gotImmutability == null || fromImmutability == null) {
-        println("addReason was null ", gotImmutability, fromImmutability)
+        Utils.log("Add immutability reason was null (this should never happen")
         System.exit(0)
       }
-      reasons += (gotImmutability -> fromImmutability)
+      ImmutabilityReasons += (gotImmutability -> fromImmutability)
+      Utils.log(s"The class '${gotImmutability.fullName}' went ${immutability} because '${reason}' from '${fromImmutability.fullName}'")
+
+      if (immutability == Mutable) {
+        var set = ImmutabilityReasonsMutable.getOrElse(gotImmutability, null)
+        if (set == null) {
+          set = Set[String]()
+        }
+        set += reason
+        ImmutabilityReasonsMutable += gotImmutability -> set
+        ImmutabilityReasonsShallow -= gotImmutability
+      } else if (immutability == ShallowImmutable && !ImmutabilityReasonsMutable.contains(gotImmutability)) {
+        var set = ImmutabilityReasonsShallow.getOrElse(gotImmutability, null)
+        if (set == null) {
+          set = Set[String]()
+        }
+        set += reason
+        ImmutabilityReasonsShallow += gotImmutability -> set
+      }
     }
 
     def compilerGenerated(mods: Modifiers): Boolean = {
@@ -47,8 +87,12 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
     }
 
     def putMutability(typeArgument: Type, klassCompleter: CellCompleter[ImmutabilityKey.type, Immutability], classContext: ClassContext): List[Immutability] = {
-      val typeSymbol = typeArgument.typeSymbol // E.g. "class Mutable"
+      val typeSymbol = typeArgument.typeSymbol
+      // E.g. "class Mutable"
       val typeCellCompleter = classToCellCompleter.getOrElse(typeSymbol, null)
+      if (typeSymbol.isTypeParameter) {
+        return List(MutabilityUnknown) // Ignore type params
+      }
       if (typeCellCompleter == null) {
         // The type (e.g. Foo) did not have a cell completer and  could be an imported class from some unknown library
         // or some anonymous class/fn/
@@ -57,46 +101,40 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
           // Refinement class:
           // val foo = new A with B
           // Lookup A and B
-          recursivePutMutability(typeArgument.parents, klassCompleter, ClassTypeParameterContext)
+          recursivePutMutability(typeArgument.parents, klassCompleter, ValDefinitionContext)
         } else {
           val klass = cellCompleterToClass.getOrElse(klassCompleter, null)
-          var mutability = KnownObjects.getMutability(typeSymbol.fullName.toString)
+          // If it is a known type such as "List", "scala.collection.mutable.ArrayBuffer" etc
+          var mutability = Assumptions.getImmutabilityAssumption(typeSymbol.fullName.toString)
           if (mutability == MutabilityUnknown) {
-            // If it is a known type such as "List", "scala.collection.mutable.ArrayBuffer" etc
-            mutability = KnownObjects.getMutability(typeArgument.typeSymbol.fullName.toString)
-            if (mutability == MutabilityUnknown) {
-              // It was not known by looking at the type string
-              // assume that it's mutable
-              if (classContext == ParentClassContext) {
-                // In the case, "class Child extends Parent { ... }" and "Parent" has "MutabilityUnknown"
-                // assume "Child" to be "Mutable"
-                mutability = Mutable
-                println(s"Klass '$klass' went mutable. Inherited an unknown parent: '${typeArgument.typeSymbol}'.")
-                addImmutabilityReason(klass, typeArgument.typeSymbol)
-                klassCompleter.putFinal(mutability)
-              } else if (classContext == ValDefinitionContext || classContext == ClassTypeParameterContext) {
-                // In a val definition, set the class to be shallow immutable
-                // since the val def points to a mutable (unknown type)
-                mutability = ShallowImmutable
-                addImmutabilityReason(klass, typeArgument.typeSymbol)
-                klassCompleter.putNext(mutability)
-              }
-            } else {
-              addImmutabilityReason(klass, typeArgument.typeSymbol)
-              if (mutability == Mutable) {
-                println(s"Klass '$klass' went mutable. Type argument was mutable: '${typeArgument.typeSymbol}'.")
-                klassCompleter.putFinal(mutability)
-              } else {
-                klassCompleter.putNext(mutability)
-              }
+            // It was not known by looking at the type string, assume that it's mutable
+            if (classContext == ParentClassContext) {
+              // In the case, "class Child extends Parent { ... }" and "Parent" has "MutabilityUnknown"
+              // assume "Child" to be "Mutable"
+              mutability = Mutable
+              addImmutabilityReason(klass, typeSymbol, Mutable, PARENT_WAS_UNKNOWN)
+              klassCompleter.putFinal(mutability)
+            } else if (classContext == ValDefinitionContext) {
+              // In a val definition, set the class to be shallow immutable
+              // since the val def points to a mutable (unknown type)
+              mutability = ShallowImmutable
+
+              // TODO: Is this join needed?
+              //if (Immutability.immutabilityJoin(klassCompleter.cell.getResult, mutability)) {
+              //}
+
+              addImmutabilityReason(klass, typeSymbol, ShallowImmutable, VAL_FIELD_REFERS_TO_UNKNOWN)
+              klassCompleter.putNext(mutability)
             }
           } else {
-            addImmutabilityReason(klass, typeSymbol)
             if (mutability == Mutable) {
-              println(s"Klass '$klass' went mutable. Type was mutable: '${typeArgument.typeSymbol}'.")
+              if (classContext == ParentClassContext) {
+                addImmutabilityReason(klass, typeSymbol, Mutable, PARENT_WAS_MUTABLE_ASSUMPTION)
+              } else if (classContext == ValDefinitionContext) {
+                mutability = ShallowImmutable
+                addImmutabilityReason(klass, typeSymbol, Mutable, VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION)
+              }
               klassCompleter.putFinal(mutability)
-            } else {
-              klassCompleter.putNext(mutability)
             }
           }
           List(mutability)
@@ -120,9 +158,14 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
             case _ => Immutable
           }
           if (mutability == Mutable) {
-            println(s"Klass '$childClass' went mutable. Owner was mutable: '${ownerClass}'.")
+            addImmutabilityReason(childClass, ownerClass, Mutable, PARENT_WAS_MUTABLE)
+          } else if (mutability == ShallowImmutable) {
+            // TODO: Is join needed?
+            //if (Immutability.immutabilityJoin(childCellCompleter.cell.getResult, mutability)) {
+            //}
+            addImmutabilityReason(childClass, ownerClass, ShallowImmutable, PARENT_WAS_SHALLOW)
           }
-        } else if (classContext == ValDefinitionContext || classContext == ClassTypeParameterContext) {
+        } else if (classContext == ValDefinitionContext) {
           // The cell of "Foo" was complete, set owner of vd cell to the same mutability
           // If it complete it is either Mutable or ShallowImmutable.
           mutability = ownerCellCompleter.cell.getResult match {
@@ -130,14 +173,22 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
             case ShallowImmutable => ShallowImmutable
             case _ => Immutable
           }
+          if (ownerCellCompleter.cell.getResult == Mutable) {
+            // TODO: Is join needed?
+            //if (Immutability.immutabilityJoin(childCellCompleter.cell.getResult, mutability)) {
+            //}
+            addImmutabilityReason(childClass, ownerClass, ShallowImmutable, VAL_FIELD_REFERS_TO_MUTABLE)
+          } else if (ownerCellCompleter.cell.getResult == ShallowImmutable) {
+            // TODO: Is join needed?
+            //if (Immutability.immutabilityJoin(childCellCompleter.cell.getResult, mutability)) {
+            //}
+            addImmutabilityReason(childClass, ownerClass, ShallowImmutable, VAL_FIELD_REFERS_TO_SHALLOW)
+          }
         }
         if (mutability == Mutable) {
           childCellCompleter.putFinal(mutability)
         } else {
           childCellCompleter.putNext(mutability)
-        }
-        if (mutability == Mutable || mutability == ShallowImmutable) {
-          addImmutabilityReason(childClass, ownerClass)
         }
         List(mutability)
       } else {
@@ -146,8 +197,7 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
           // If we inherit a mutable
           childCellCompleter.cell.whenNext(ownerCellCompleter.cell, (x: Immutability) => {
             if (x == Mutable) {
-              addImmutabilityReason(childClass, ownerClass)
-              println(s"Klass '$childClass' went mutable. Owner was mutable: '${ownerClass}'")
+              addImmutabilityReason(childClass, ownerClass, Mutable, PARENT_WAS_MUTABLE)
               WhenNextComplete
             } else {
               FalsePred
@@ -156,30 +206,29 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
           // If we inherit a shallow immutable
           childCellCompleter.cell.whenNext(ownerCellCompleter.cell, (x: Immutability) => {
             if (x == ShallowImmutable) {
-              addImmutabilityReason(childClass, ownerClass)
+              addImmutabilityReason(childClass, ownerClass, ShallowImmutable, PARENT_WAS_SHALLOW)
               WhenNext
             } else {
               FalsePred
             }
           }, Some(ShallowImmutable))
-        } else if (classContext == ValDefinitionContext || classContext == ClassTypeParameterContext) {
+        } else if (classContext == ValDefinitionContext) {
           childCellCompleter.cell.whenNext(ownerCellCompleter.cell, (x: Immutability) => {
             if (x == Mutable || x == ShallowImmutable) {
+              if (x == Mutable) {
+                addImmutabilityReason(childClass, ownerClass, ShallowImmutable, VAL_FIELD_REFERS_TO_MUTABLE)
+              } else if (x == ShallowImmutable) {
+                addImmutabilityReason(childClass, ownerClass, ShallowImmutable, VAL_FIELD_REFERS_TO_SHALLOW)
+              }
               // If a val field refers to a Mutable or ShallowImmutable type
               // we set owner of the klass to be ShallowImmutable.
-              addImmutabilityReason(childClass, ownerClass)
-              if (x == Mutable) {
-                println(s"Klass '$childClass' went mutable. Definition refered to mutable type: '${ownerClass}'")
-              }
               WhenNext
             } else {
               FalsePred
             }
           }, Some(ShallowImmutable))
         }
-        // Put the current value of the cell to the owner
         val mutability = ownerCellCompleter.cell.getResult
-        childCellCompleter.putNext(mutability)
         List(mutability)
       }
     }
@@ -191,10 +240,12 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
       }
     }
 
-    def handleValAssignment(ownerKlass: Symbol, tpe: Type, mods: Modifiers, klassCompleter: CellCompleter[ImmutabilityKey.type, Immutability]): Unit = {
+    def handleValAssignment(tpe: Type, mods: Modifiers, klassCompleter: CellCompleter[ImmutabilityKey.type, Immutability]): Unit = {
       // Investigate the the assignment
-      val assignedType = tpe // E.g. "Mutable"
-      val assignedTypeSymbol = assignedType.typeSymbol // E.g. "class Mutable"
+      val assignedType = tpe
+      // E.g. "Mutable"
+      val assignedTypeSymbol = assignedType.typeSymbol
+      // E.g. "class Mutable"
       val assignedTypeCompleter = classToCellCompleter.getOrElse(assignedTypeSymbol, null)
       if (assignedTypeCompleter == null) {
         // The assigned type e.g. "Mutable" did not have a cell completer
@@ -210,12 +261,12 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) =>
         val klass = cls.symbol
-        if (compilerGenerated(mods) || klass.isAnonymousClass) {
-          // TODO:
-          // Anonymous class
-          // Assume immutable for now
+
+        if (compilerGenerated(mods)) {
+          // Ignore compiler generated
           return traverse(impl)
         }
+
         val klassCompleter = classToCellCompleter.getOrElse(klass, null)
         if (klassCompleter == null) {
           classesWithoutCellCompleter += klass
@@ -224,30 +275,44 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
           System.exit(1)
         }
 
-        val publicAccessorSetters = klass.tpe.decls.collect{case f: Symbol if f.isSetter && f.isAccessor && f.isPublic => f}
-        val privateAccessorSetters = klass.tpe.decls.collect{case f: Symbol if f.isSetter && f.isAccessor && !f.isPublic => f}
-        for (f <- publicAccessorSetters) { //  && !f.isMethod => f
-          val typeThatGetSetSymbol = f.firstParam.tpe.typeSymbol
-          // It's a mutable value, e.g. "var x"
-          println(s"Class '$klass' went mutable. Definition was var.")
-          addImmutabilityReason(klass, typeThatGetSetSymbol)
-          klassCompleter.putFinal(Mutable)
-        }
-        for (f <- privateAccessorSetters) {
-          // It's a mutable value, e.g. "private var x"
-          val typeThatGetSet = f.firstParam.tpe
-          handleValAssignment(klass, typeThatGetSet, mods, klassCompleter)
-        }
-        if (!compilerGenerated(mods) && !klassCompleter.cell.isComplete) {
-          // TODO:
-          // Line below does not make any sense?
-          // klass.typeParams.map(_.tpe), recursivePutMutability(klass.typeParams.map(_.tpe), klassCompleter, ClassTypeParameterContext))
+        if (!klassCompleter.cell.isComplete) {
+          if (klass.typeParams.nonEmpty) {
+            Utils.log(s"Class '${klass.fullName}' went ConditionallyImmutable. Had type params: '${klass.typeParams}'")
+            klassCompleter.putNext(ConditionallyImmutable)
+          }
 
-          // Check the parents of the class
-          klass.tpe.parents.foreach(putMutability(_, klassCompleter, ParentClassContext))
-        } else if (!compilerGenerated(mods)) {
-          // hello
+          val publicAccessorSetters = klass.tpe.decls.collect { case f: Symbol if f.isSetter && f.isAccessor && f.isPublic => f }
+          val privateAccessorSetters = klass.tpe.decls.collect { case f: Symbol if f.isSetter && f.isAccessor && !f.isPublic => f }
+          for (f <- publicAccessorSetters) {
+            val typeThatGetSetSymbol = f.firstParam.tpe.typeSymbol
+            // It's a mutable value, e.g. "var x"
+            addImmutabilityReason(klass, typeThatGetSetSymbol, Mutable, FIELD_HAS_VAR_PUBLIC)
+            klassCompleter.putFinal(Mutable)
+          }
+
+          for (f <- privateAccessorSetters) {
+            // It's a mutable value, e.g. "private var x"
+            val typeThatGetSet = f.firstParam.tpe
+            // If we "allow" private var, treat as val
+            if (Utils.AllowPrivateVar) {
+              handleValAssignment(typeThatGetSet, mods, klassCompleter)
+            } else {
+              val typeThatGetSetSymbol = typeThatGetSet.typeSymbol
+              addImmutabilityReason(klass, typeThatGetSetSymbol, Mutable, FIELD_HAS_VAR_PRIVATE)
+              klassCompleter.putFinal(Mutable)
+            }
+          }
+
+          if (!compilerGenerated(mods)) {
+            // Check the parents of the class
+            klass.tpe.parents.foreach(tpe => {
+              recursivePutMutability(List(tpe), klassCompleter, ParentClassContext)
+            })
+          } else if (!compilerGenerated(mods)) {
+            // hello
+          }
         }
+
         traverse(impl)
 
       case vd@ValDef(mods, name, tpt, rhs) =>
@@ -257,41 +322,41 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
           val klassCompleter = classToCellCompleter.getOrElse(klass, null)
           if (klassCompleter == null) {
             // TODO: When does this happen?
-            // println(s"Did not find a cell completer for vd owner class: $klass, field: $vd", vd, mods, name, tpt, rhs)
+            // Utils.log(s"Did not find a cell completer for vd owner class: $klass, field: $vd", vd, mods, name, tpt, rhs)
             classesWithoutCellCompleter += klass
-          } else {
+          } else if (!klassCompleter.cell.isComplete) {
             if (mods.hasFlag(MUTABLE)) {
+              // TODO: Var decl is
               // It's a mutable value, e.g. "var x"
-              // addImmutabilityReason(cellCompleterToClass.getOrElse(klassCompleter, null), vd.symbol)
-              // klassCompleter.putFinal(Mutable)
+              // if (!ALLOW_PRIVATE_VAR) {
+              //  Utils.log(s"Class '$klass' went mutable. Definition was var.")
+              //  addImmutabilityReason(cellCompleterToClass.getOrElse(klassCompleter, null), vd.symbol)
+              //  klassCompleter.putFinal(Mutable)
+              // }
             } else {
-              // It's an immutable values, e.g. "val x"
-              handleValAssignment(klass, tpt.tpe, mods, klassCompleter)
+              // It's an immutable values, e.g. "val x" (not private)
+              handleValAssignment(tpt.tpe, mods, klassCompleter)
             }
           }
         } else if (compilerGenerated(mods) && !klass.isClass) {
           // A compiler generated method?
-          // TODO comment
-          // println("Compiler generated:", vd, vd.symbol, vd.tpe.typeSymbol, vd.tpe.underlying)
 
+          // TODO: Remove?
           // Trait thing:
           // trait Foo {
           //  var mutable: String
           //}
           // Generates:
           // abstract trait Foo extends Object {
-          //   <accessor> def mutable(): String;
-          //   <accessor> def mutable_=(x$1: String): Unit
-          // };
-
-          if (vd.symbol.isSetterParameter) {
-            val firstParentClass = klass.ownerChain.find(_.isClass).head
-            val klassCompleter = classToCellCompleter.getOrElse(firstParentClass, null)
-            if (klassCompleter != null) {
-              // TODO:
-              // klassCompleter.putFinal(Mutable)
-            }
-          }
+          //   <accessor> def mutable(): String;pit
+          //          if (vd.symbol.isSetterParameter) {
+          //            val firstParentClass = klass.ownerChain.find(_.isClass).head
+          //            val klassCompleter = classToCellCompleter.getOrElse(firstParentClass, null)
+          //            if (klassCompleter != null) {
+          //              // TODO:
+          //              // klassCompleter.putFinal(Mutable)
+          //            }
+          //          }
         }
         traverse(rhs)
 
@@ -308,24 +373,17 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
 
     var initialized = false
 
-    def computeClassToCellCompleter() = {
-      for ((compilationUnit, mapOfCellCompleters) <- scanComponent.compilationUnitToCellCompleters) {
-        for ((klass, cellCompleter) <- mapOfCellCompleters) {
-          classToCellCompleter += (klass.asInstanceOf[Symbol] -> cellCompleter) // TODO: double check if this cast works
-        }
-      }
-    }
-
-    def computeCellCompleterToClass() = {
-      cellCompleterToClass = classToCellCompleter.map(_.swap)
-    }
-
     override def apply(unit: CompilationUnit): Unit = {
       if (Utils.isScalaTest) {
         // If in in test, overwrite the map for each compilation unit
         classToCellCompleter = Map()
         computeClassToCellCompleter()
         computeCellCompleterToClass()
+        classesWithoutCellCompleter = Set[Symbol]()
+        assignmentWithoutCellCompleter = Set[Symbol]()
+        ImmutabilityReasons = Map[Symbol, Symbol]()
+        ImmutabilityReasonsMutable = Map[Symbol, Set[String]]()
+        ImmutabilityReasonsShallow = Map[Symbol, Set[String]]()
       } else if (!initialized) {
         // Do the computation once, the scan component has already
         // traversed all compilation units
@@ -336,7 +394,17 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
       val mutabilityTraverser = new MutabilityTraverser()
       mutabilityTraverser.traverse(unit.body)
     }
-  }
 
-  override def newPhase(prev: Phase): StdPhase = new FirstPhase(prev)
+    def computeClassToCellCompleter(): Unit = {
+      for ((compilationUnit, mapOfCellCompleters) <- scanComponent.compilationUnitToCellCompleters) {
+        for ((klass, cellCompleter) <- mapOfCellCompleters) {
+          classToCellCompleter += (klass.asInstanceOf[Symbol] -> cellCompleter)
+        }
+      }
+    }
+
+    def computeCellCompleterToClass(): Unit = {
+      cellCompleterToClass = classToCellCompleter.map(_.swap)
+    }
+  }
 }

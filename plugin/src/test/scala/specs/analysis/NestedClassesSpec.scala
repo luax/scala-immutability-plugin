@@ -14,7 +14,7 @@ class NestedClassesSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("Animal", "Foo") -> Utils.IsDeeplyImmutable, List("Bar", "Cool") -> Utils.IsShallowImmutable)) {
+    TestUtils.expectMutability(Map(List("Animal", "Foo") -> Utils.IsDeeplyImmutable, List("Bar", "Cool") -> Utils.IsConditionallyImmutable)) {
       """
       class Animal () {
         def sound = {
@@ -23,15 +23,15 @@ class NestedClassesSpec extends FlatSpec {
 
       }
       class Foo () {
-        def biophony[T <: Animal](things: Seq[T]) = things map (_.sound)
+        def biophony[T <: Animal](things: List[T]) = things map (_.sound)
       }
 
       class Cool[K <: Animal]() {
         val bars: List[Bar[K]] = List()
-        val barsTest = List(Seq(new Animal()))
+        val barsTest = List(List(new Animal()))
       }
 
-      class Bar[T <: Animal](things: Seq[T]) {
+      class Bar[T <: Animal](things: List[T]) {
 
       }
       """

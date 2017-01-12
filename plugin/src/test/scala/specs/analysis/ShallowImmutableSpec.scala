@@ -185,15 +185,8 @@ class ShallowImmutableSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("Test", "Foo") -> Utils.IsShallowImmutable)) {
+    TestUtils.expectMutability(Map(List("Test") -> Utils.IsDeeplyImmutable, List("Foo") -> Utils.IsConditionallyImmutable)) {
       """
-      case class Foo[A, B](f: A => B) {
-        println(f)
-        def print1 {
-          println("1")
-        }
-      }
-
       object Test {
 
         val f1 = Foo {
@@ -203,6 +196,12 @@ class ShallowImmutableSpec extends FlatSpec {
 
         f1.print1
 
+      }
+      case class Foo[A, B](f: A => B) {
+        println(f)
+        def print1 {
+          println("1")
+        }
       }
       """
     }

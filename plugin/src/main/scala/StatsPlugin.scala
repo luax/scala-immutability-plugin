@@ -9,6 +9,8 @@ class StatsPlugin(val global: Global) extends NscPlugin {
   val name = "stats-plugin"
   val description = "A one-line description of the plugin"
 
+  Utils.log(s"Running plugin: $name")
+
   /* The phases */
   val runAfterPhase = "refchecks"
   val phaseOne = "phase name 1"
@@ -21,5 +23,4 @@ class StatsPlugin(val global: Global) extends NscPlugin {
   val reporterPluginComponent = new ReporterComponent(global, phaseThree, phaseTwo, scanComponent, mutabilityPluginComponent)
   val components = List[NscPluginComponent](scanComponent, mutabilityPluginComponent, reporterPluginComponent)
 
-  Utils.log(s"Running plugin: $name")
 }

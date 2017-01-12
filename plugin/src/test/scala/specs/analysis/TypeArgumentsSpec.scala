@@ -18,7 +18,7 @@ class TypeArgumentsSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("Foo") -> Utils.IsShallowImmutable)) {
+    TestUtils.expectMutability(Map(List("Foo") -> Utils.IsConditionallyImmutable)) {
       """
         class Foo[T](val a: T)
       """
@@ -26,7 +26,7 @@ class TypeArgumentsSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(Map(List("T") -> Utils.IsDeeplyImmutable, List("Foo") -> Utils.IsShallowImmutable)) {
+    TestUtils.expectMutability(Map(List("T") -> Utils.IsDeeplyImmutable, List("Foo") -> Utils.IsConditionallyImmutable)) {
       """
         class T(val immutable: String)
         class Foo[T](val a: T)
