@@ -54,7 +54,7 @@ class GenericSpec extends FlatSpec {
   }
 
   it should testNr in {
-    TestUtils.expectMutability(List("A"), Utils.IsMutable) {
+    TestUtils.expectMutability(List("A"), Utils.IsShallowImmutable) {
       """
         import scala.collection.mutable.ArrayBuffer
         class A {
