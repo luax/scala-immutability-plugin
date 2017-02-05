@@ -1,7 +1,5 @@
-# scala-stats
-
 ## Overview
-A Scala compiler plugin that can be used to determine the immutability property of classes in a project.
+A Scala compiler plugin that analyze a Scala project's classes at compile-time and reports the immutability property of a given class.
 
 ## Usage
 To use the plugin, compile it to a `.jar` file (instructions below) and use the `-XPlugin` argument with `scalac` to compile the Scala project you want to analyze. 
@@ -85,15 +83,14 @@ A class is determined mutable if:
 
 * The class contains any mutable field i.e., a **var** field.
 * The source code of the class is unknown (unreachable from this project).
+* It inherits a mutable class.
 
 If a superclass is mutable all subclasses are also mutable.
 A subclass can never have a "better" mutability than it's superclass.
 
 ### Shallow immutable
-Non-transitive (shallow) immutability.
-A class has the propperty shallow immutable if an instance of that class has a state that cannot be mutated but has references to other objects
-that may be mutated.
-A class is determined shallow immutable if:
+A class has the property, non-transitive (shallow) immutability, if an instance of that class has a state that cannot be mutated but has references to other objects that may be mutated.
+The class is determined shallow immutable if:
 
 * The class contains only immutable fields i.e., **val** definitions.
 * Has a parent that is shallow immutable.
