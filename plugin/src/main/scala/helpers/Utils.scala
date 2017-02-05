@@ -7,8 +7,8 @@ import cell.HandlerPool
 
 object Utils {
   private val ScalaTestPattern = "scalatest"
-  private val LoggingEnabled = true
-  private val scalaTestClassPathFound = getClass.getClassLoader.asInstanceOf[URLClassLoader].getURLs.map(_.getFile).mkString(File.pathSeparator).contains(ScalaTestPattern)
+  private val ScalaTestClassPathFound = getClass.getClassLoader.asInstanceOf[URLClassLoader].getURLs.map(_.getFile).mkString(File.pathSeparator).contains(ScalaTestPattern)
+  private val LoggingEnabled = !isScalaTest
 
   val TestExpectedMessagePropertyStr = "plugin.test.expected.message"
   val IsMutable = "mutable"
@@ -25,7 +25,7 @@ object Utils {
   // Assume that certain types are immutable/mutable e.g., "scala.collection.immutable.list" is immutable.
   val MakeAssumptionAboutTypes = true
   if (MakeAssumptionAboutTypes) {
-    println(s"NOTE: Assuming that certain types are immutable/mutable e.g., 'scala.collection.immutable.list' is immutable")
+    println(s"NOTE: Assuming that certain classes are immutable/mutable e.g., 'scala.collection.immutable.list' is immutable")
   }
 
   private var pool: HandlerPool = _
@@ -42,7 +42,7 @@ object Utils {
 
   def setCurrentTestMessage(mutabilityMessage: String): Unit = System.setProperty(Utils.TestExpectedMessagePropertyStr, mutabilityMessage)
 
-  def isScalaTest = scalaTestClassPathFound
+  def isScalaTest = ScalaTestClassPathFound
 
   def getPool: HandlerPool = {
     if (pool == null) {
