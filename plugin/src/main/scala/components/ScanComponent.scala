@@ -21,8 +21,9 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
   var classesWithVal: Set[Symbol] = _
   var classesWithLazyVals: Set[Symbol] = _
   var caseClasses: Set[Symbol] = _
-  var abstractClasses: Set[Symbol] = _
+  var caseObjects: Set[Symbol] = _
   var classes: Set[Symbol] = _
+  var anonymousClasses: Set[Symbol] = _
   var traits: Set[Symbol] = _
   var objects: Set[Symbol] = _
   var templates: Set[Symbol] = _
@@ -37,8 +38,9 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     classesWithVal = Set()
     classesWithLazyVals = Set()
     caseClasses = Set()
-    abstractClasses = Set()
+    caseObjects = Set()
     classes = Set()
+    anonymousClasses = Set()
     traits = Set()
     objects = Set()
     templates = Set()
@@ -69,14 +71,18 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
 
     def countClassDef(symbol: Symbol, mods: Modifiers): Unit = {
       if (symbol.isModuleClass) {
-        objects += symbol
+        if (mods hasFlag Flag.CASE) {
+          caseObjects += symbol
+        } else {
+          objects += symbol
+        }
+      } else if (symbol.isAnonymousClass) {
+        anonymousClasses += symbol
       } else {
         if (mods hasFlag Flag.TRAIT) {
           traits += symbol
         } else if (mods hasFlag Flag.CASE) {
           caseClasses += symbol
-        } else if (mods.hasFlag(Flag.ABSTRACT)) {
-          abstractClasses += symbol
         } else {
           classes += symbol
         }

@@ -62,3 +62,4 @@ crashlytics-build.properties
 fabric.properties
 
 gitignored/
+.DS_Store

@@ -1,19 +1,148 @@
 package components
 
+import cell.CellCompleter
 import helpers.Utils
 import immutability._
 
-import scala.collection.mutable.Set
+import scala.collection.mutable.{ListBuffer, Map, Set}
 import scala.tools.nsc._
 import scala.tools.nsc.plugins.{Plugin => NscPlugin, PluginComponent => NscPluginComponent}
 
 class ReporterComponent(val global: Global, val phaseName: String, val runsAfterPhase: String, val scanComponent: ScanComponent, val mutabilityComponent: MutabilityComponent) extends NscPluginComponent {
-
   import global._
 
   override val runsAfter = List(runsAfterPhase)
 
   var hasRun = false
+
+  class Data() {
+
+    class Template () {
+      var objects: Set[mutabilityComponent.global.Symbol] = Set()
+      var caseObjects: Set[mutabilityComponent.global.Symbol] = Set()
+      var traits: Set[mutabilityComponent.global.Symbol] = Set()
+      var classes: Set[mutabilityComponent.global.Symbol] = Set()
+      var caseClasses: Set[mutabilityComponent.global.Symbol] = Set()
+      var anonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
+    }
+    class Mutable extends Template
+    class ShallowImmutable extends Template
+    class DeeplyImmutable extends Template
+    class ConditionallyImmutable extends Template
+
+    val mutable = new Mutable()
+    val deeplyImmutable = new DeeplyImmutable()
+    val shallowImmutable = new ShallowImmutable()
+    val conditionallyImmutable = new ConditionallyImmutable()
+
+    def conditionallyImmutableInheritance(classesThatExtendWithTypeArguments: Map[scanComponent.global.Symbol, Set[scanComponent.global.Type]]) = {
+      findConditionallyImmutableWithShallowOrMutable(classesThatExtendWithTypeArguments).foreach((x) => {
+        val klass = x._1
+        val immutability = x._2
+        val parent = x._3
+        val field = x._3
+        val typeArgument = x._4
+        val typeArgumentCellCompleter = x._5
+        // println(s"Found a class '${klass}' (with immutability property ${immutability}) that extends a klass '${parent.typeSymbol.fullName}' (that is conditionally immutable) using a type argument with immutability property '${typeArgumentCellCompleter.cell.getResult()}' (${typeArgument.typeSymbol.fullName})")
+        categorize(klass, immutability)
+      })
+    }
+
+    def conditionallyImmutableFields(classesThatHaveFieldsWithTypeArguments: Map[scanComponent.global.Symbol, Set[scanComponent.global.Type]]) = {
+      findConditionallyImmutableWithShallowOrMutable(classesThatHaveFieldsWithTypeArguments).foreach((x) => {
+        val klass = x._1
+        val immutability = x._2
+        val field = x._3
+        val typeArgument = x._4
+        val typeArgumentCellCompleter = x._5
+        // println(s"Found a class '${klass}' (with immutability property ${immutability}) that had a field '${field}' that used a type with immutability property '${typeArgumentCellCompleter.cell.getResult()}' (${typeArgument.typeSymbol.fullName}) on a conditionally immutable class (${field.typeSymbol})")
+        categorize(klass, immutability)
+      })
+    }
+
+    def findConditionallyImmutableWithShallowOrMutable(map: Map[scanComponent.global.Symbol, Set[scanComponent.global.Type]]) = {
+      map.flatMap(x => {
+        val klass = x._1.asInstanceOf[mutabilityComponent.global.Symbol]
+        val types = x._2
+        var values = new ListBuffer[(mutabilityComponent.global.Symbol, Immutability, scanComponent.global.Type, scanComponent.global.Type, CellCompleter[ImmutabilityKey.type, Immutability])]()
+        types.foreach(tpe => {
+          tpe.typeArgs.foreach(typeArgument => {
+            val conditionallyImmutable = mutabilityComponent.classToCellCompleter.get(tpe.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
+              case Some(cellCompleter) => cellCompleter.cell.getResult == ConditionallyImmutable
+              case _ => false
+            }
+            if (conditionallyImmutable) {
+              mutabilityComponent.classToCellCompleter.get(typeArgument.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
+                case Some(typeArgumentCellCompleter) =>
+                  if (typeArgumentCellCompleter.cell.getResult() == Mutable || typeArgumentCellCompleter.cell.getResult() == ShallowImmutable) {
+                    val immutability = mutabilityComponent.classToCellCompleter.getOrElse(klass.asInstanceOf[mutabilityComponent.global.Symbol], null).cell.getResult()
+                    values += Tuple5(klass, immutability, tpe, typeArgument, typeArgumentCellCompleter)
+                  }
+                case _ =>
+              }
+            }
+          })
+        })
+        values.toList
+      })
+    }
+
+    def categorize (klass: mutabilityComponent.global.Symbol, immutability: Immutability): Unit = {
+      if (klass.isModuleClass) {
+        if (klass hasFlag Flag.CASE) {
+          immutability match {
+            case Immutable => deeplyImmutable.caseObjects += klass
+            case ShallowImmutable => shallowImmutable.caseObjects += klass
+            case Mutable => mutable.caseObjects += klass
+            case ConditionallyImmutable => conditionallyImmutable.caseObjects += klass
+            case _ =>
+          }
+        } else {
+          immutability match {
+            case Immutable => deeplyImmutable.objects += klass
+            case ShallowImmutable => shallowImmutable.objects += klass
+            case Mutable => mutable.objects += klass
+            case ConditionallyImmutable => conditionallyImmutable.objects += klass
+            case _ =>
+          }
+        }
+      } else if (klass.isAnonymousClass) {
+        immutability match {
+          case Immutable => deeplyImmutable.anonymousClasses += klass
+          case ShallowImmutable => shallowImmutable.anonymousClasses += klass
+          case Mutable => mutable.anonymousClasses += klass
+          case ConditionallyImmutable => conditionallyImmutable.anonymousClasses += klass
+          case _ =>
+        }
+      } else {
+        if (klass hasFlag Flag.TRAIT) {
+          immutability match {
+            case Immutable => deeplyImmutable.traits += klass
+            case ShallowImmutable => shallowImmutable.traits += klass
+            case Mutable => mutable.traits += klass
+            case ConditionallyImmutable => conditionallyImmutable.traits += klass
+            case _ =>
+          }
+        } else if (klass hasFlag Flag.CASE) {
+          immutability match {
+            case Immutable => deeplyImmutable.caseClasses += klass
+            case ShallowImmutable => shallowImmutable.caseClasses += klass
+            case Mutable => mutable.caseClasses += klass
+            case ConditionallyImmutable => conditionallyImmutable.caseClasses += klass
+            case _ =>
+          }
+        } else {
+          immutability match {
+            case Immutable => deeplyImmutable.classes += klass
+            case ShallowImmutable => shallowImmutable.classes += klass
+            case Mutable => mutable.classes += klass
+            case ConditionallyImmutable => conditionallyImmutable.classes += klass
+            case _ =>
+          }
+        }
+      }
+    }
+  }
 
   def notifyTest(): Unit = {
     for ((klass, v) <- mutabilityComponent.classToCellCompleter) {
@@ -64,18 +193,18 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     println("## Plugin ran successfully")
     println("##########################")
     println("##########################")
-    println("## Classes")
-    println("#classes found: " + scanComponent.classes.size)
-    println("#case classes found: " + scanComponent.caseClasses.size)
-    println("#abstract classes found: " + scanComponent.abstractClasses.size)
-    println("#traits found: " + scanComponent.traits.size)
-    println("#objects found: " + scanComponent.objects.size)
-    println("#templs found: " + scanComponent.templates.size)
-    println("-")
-    println("Fields")
-    println("#classes with var: " + scanComponent.classesWithVar.size)
-    println("#classes with val: " + scanComponent.classesWithVal.size)
-    println("#classes with only val: " + (scanComponent.classesWithVal -- scanComponent.classesWithVar).size)
+    println("## Templates (including private, abstract, sealed etc)")
+    println("# templates found: " + scanComponent.templates.size)
+    println("# classes found: " + scanComponent.classes.size)
+    println("# case classes found: " + scanComponent.caseClasses.size)
+    println("# anonymous classes found: " + scanComponent.anonymousClasses.size)
+    println("# traits found: " + scanComponent.traits.size)
+    println("# objects found: " + scanComponent.objects.size)
+    println("# case objects found: " + scanComponent.objects.size)
+    println("## Fields")
+    println("#templates with var: " + scanComponent.classesWithVar.size)
+    println("#templates with val: " + scanComponent.classesWithVal.size)
+    println("#templates with only val: " + (scanComponent.classesWithVal -- scanComponent.classesWithVar).size)
 
     immutabilityStatistics()
     reasonsCount()
@@ -102,179 +231,96 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
   }
 
   def immutabilityStatistics() = {
-    var mutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var shallowImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var immutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var conditionallyImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
+    val data = new Data()
     for ((k, v) <- mutabilityComponent.classToCellCompleter) {
       val immutability = v.cell.getResult
       val klass = k.asInstanceOf[mutabilityComponent.global.Symbol]
-      if (klass.isModuleClass) {
-        immutability match {
-          case Immutable => immutableObjects += klass
-          case ShallowImmutable => shallowImmutableObjects += klass
-          case Mutable => mutableObjects += klass
-          case ConditionallyImmutable => conditionallyImmutableObjects += klass
-          case _ =>
-        }
-      } else if (klass.isAnonymousClass) {
-        immutability match {
-          case Immutable => immutableAnonymousClasses += klass
-          case ShallowImmutable => shallowImmutableAnonymousClasses += klass
-          case Mutable => mutableAnonymousClasses += klass
-          case ConditionallyImmutable => conditionallyImmutableAnonymousClasses += klass
-          case _ =>
-        }
-      } else {
-        if (klass hasFlag Flag.TRAIT) {
-          immutability match {
-            case Immutable => immutableTraits += klass
-            case ShallowImmutable => shallowImmutableTraits += klass
-            case Mutable => mutableTraits += klass
-            case ConditionallyImmutable => conditionallyImmutableTraits += klass
-            case _ =>
-          }
-        } else if (klass hasFlag Flag.CASE) {
-          immutability match {
-            case Immutable => immutableCaseClasses += klass
-            case ShallowImmutable => shallowImmutableCaseClasses += klass
-            case Mutable => mutableCaseClasses += klass
-            case ConditionallyImmutable => conditionallyImmutableCaseClasses += klass
-            case _ =>
-          }
-        } else if (klass hasFlag Flag.ABSTRACT) {
-          immutability match {
-            case Immutable => immutableAbstractClasses += klass
-            case ShallowImmutable => shallowImmutableAbstractClasses += klass
-            case Mutable => mutableAbstractClasses += klass
-            case ConditionallyImmutable => conditionallyImmutableAbstractClasses += klass
-            case _ =>
-          }
-        } else {
-          immutability match {
-            case Immutable => immutableClasses += klass
-            case ShallowImmutable => shallowImmutableClasses += klass
-            case Mutable => mutableClasses += klass
-            case ConditionallyImmutable => conditionallyImmutableClasses += klass
-            case _ =>
-          }
-        }
-      }
+      data.categorize(klass, immutability)
     }
 
     println("-")
     println("## Immutability statistics")
     println("-")
-    println("#mutable objects: " + mutableObjects.size)
-    printSymbols(mutableObjects)
+    println("#mutable objects: " + data.mutable.objects.size)
+    printSymbols(data.mutable.objects)
 
-    println("#mutable traits: " + mutableTraits.size)
-    printSymbols(mutableTraits)
+    println("#mutable traits: " + data.mutable.traits.size)
+    printSymbols(data.mutable.traits)
 
-    println("#mutable case: " + mutableCaseClasses.size)
-    printSymbols(mutableCaseClasses)
+    println("#mutable case classes: " + data.mutable.caseClasses.size)
+    printSymbols(data.mutable.caseClasses)
 
-    println("#mutable abstract: " + mutableAbstractClasses.size)
-    printSymbols(mutableAbstractClasses)
+    println("#mutable case objects: " + data.mutable.caseObjects.size)
+    printSymbols(data.mutable.caseObjects)
 
-    println("#mutable classes: " + mutableClasses.size)
-    printSymbols(mutableClasses)
+    println("#mutable classes: " + data.mutable.classes.size)
+    printSymbols(data.mutable.classes)
 
-    println("#mutable anonymous: " + mutableAnonymousClasses.size)
-    printSymbols(mutableAnonymousClasses)
+    println("#mutable anonymous: " + data.mutable.anonymousClasses.size)
+    printSymbols(data.mutable.anonymousClasses)
     println("-")
 
-    println("#shallow objects: " + shallowImmutableObjects.size)
-    printSymbols(shallowImmutableObjects)
+    println("#shallow objects: " + data.shallowImmutable.objects.size)
+    printSymbols(data.shallowImmutable.objects)
 
-    println("#shallow traits: " + shallowImmutableTraits.size)
-    printSymbols(shallowImmutableTraits)
+    println("#shallow traits: " + data.shallowImmutable.traits.size)
+    printSymbols(data.shallowImmutable.traits)
 
-    println("#shallow case: " + shallowImmutableCaseClasses.size)
-    printSymbols(shallowImmutableCaseClasses)
+    println("#shallow case classes: " + data.shallowImmutable.caseClasses.size)
+    printSymbols(data.shallowImmutable.caseClasses)
 
-    println("#shallow abstract: " + shallowImmutableAbstractClasses.size)
-    printSymbols(shallowImmutableAbstractClasses)
+    println("#shallow case objects: " + data.shallowImmutable.caseObjects.size)
+    printSymbols(data.shallowImmutable.caseObjects)
 
-    println("#shallow classes: " + shallowImmutableClasses.size)
-    printSymbols(shallowImmutableClasses)
+    println("#shallow classes: " + data.shallowImmutable.classes.size)
+    printSymbols(data.shallowImmutable.classes)
 
-    println("#shallow anonymous: " + shallowImmutableAnonymousClasses.size)
-    printSymbols(shallowImmutableAnonymousClasses)
+    println("#shallow anonymous: " + data.shallowImmutable.anonymousClasses.size)
+    printSymbols(data.shallowImmutable.anonymousClasses)
     println("-")
 
-    println("#immutable objects: " + immutableObjects.size)
-    printSymbols(immutableObjects)
+    println("#immutable objects: " + data.deeplyImmutable.objects.size)
+    printSymbols(data.deeplyImmutable.objects)
 
-    println("#immutable traits: " + immutableTraits.size)
-    printSymbols(immutableTraits)
+    println("#immutable traits: " + data.deeplyImmutable.traits.size)
+    printSymbols(data.deeplyImmutable.traits)
 
-    println("#immutable case: " + immutableCaseClasses.size)
-    printSymbols(immutableCaseClasses)
+    println("#immutable case classes: " + data.deeplyImmutable.caseClasses.size)
+    printSymbols(data.deeplyImmutable.caseClasses)
 
-    println("#immutable abstract: " + immutableAbstractClasses.size)
-    printSymbols(immutableAbstractClasses)
+    println("#immutable case objects: " + data.deeplyImmutable.caseObjects.size)
+    printSymbols(data.deeplyImmutable.caseObjects)
 
-    println("#immutable classes: " + immutableClasses.size)
-    printSymbols(immutableClasses)
+    println("#immutable classes: " + data.deeplyImmutable.classes.size)
+    printSymbols(data.deeplyImmutable.classes)
 
-    println("#immutable anonymous: " + immutableAnonymousClasses.size)
-    printSymbols(immutableAnonymousClasses)
+    println("#immutable anonymous: " + data.deeplyImmutable.anonymousClasses.size)
+    printSymbols(data.deeplyImmutable.anonymousClasses)
     println("-")
 
-    println("#conditionally immutable objects: " + immutableObjects.size)
-    printSymbols(immutableObjects)
+    println("#conditionally immutable objects: " + data.conditionallyImmutable.objects.size)
+    printSymbols(data.conditionallyImmutable.objects)
 
-    println("#conditionally immutable traits: " + immutableTraits.size)
-    printSymbols(immutableTraits)
+    println("#conditionally immutable traits: " + data.conditionallyImmutable.traits.size)
+    printSymbols(data.conditionallyImmutable.traits)
 
-    println("#conditionally immutable case: " + immutableCaseClasses.size)
-    printSymbols(immutableCaseClasses)
+    println("#conditionally immutable case classes: " + data.conditionallyImmutable.caseClasses.size)
+    printSymbols(data.conditionallyImmutable.caseClasses)
 
-    println("#conditionally immutable  abstract: " + immutableAbstractClasses.size)
-    printSymbols(immutableAbstractClasses)
+    println("#conditionally immutable case objects: " + data.conditionallyImmutable.caseObjects.size)
+    printSymbols(data.conditionallyImmutable.caseObjects)
 
-    println("#conditionally immutable classes: " + immutableClasses.size)
-    printSymbols(immutableClasses)
+    println("#conditionally immutable classes: " + data.conditionallyImmutable.classes.size)
+    printSymbols(data.conditionallyImmutable.classes)
 
-    println("#conditionally immutable anonymous: " + conditionallyImmutableAnonymousClasses.size)
-    printSymbols(conditionallyImmutableAnonymousClasses)
+    println("#conditionally immutable anonymous: " + data.conditionallyImmutable.anonymousClasses.size)
+    printSymbols(data.conditionallyImmutable.anonymousClasses)
     println("-")
 
     println("-")
     println("## Immutability statistics matrix")
     println(s"(Template) \t Mutable \t Shallow immutable \t Deeply immutable \t Conditionally deeply immutable")
-    println(s"Classes \t ${mutableClasses.size} \t ${shallowImmutableClasses.size} \t ${immutableClasses.size} \t ${conditionallyImmutableClasses.size}")
-    println(s"Case Classes \t ${mutableCaseClasses.size} \t ${shallowImmutableCaseClasses.size} \t ${immutableCaseClasses.size} \t ${conditionallyImmutableCaseClasses.size}")
-    println(s"Abstract Classes \t ${mutableAbstractClasses.size} \t ${shallowImmutableAbstractClasses.size} \t ${immutableAbstractClasses.size} \t ${conditionallyImmutableAbstractClasses.size}")
-    println(s"Traits \t ${mutableTraits.size} \t ${shallowImmutableTraits.size} \t ${immutableTraits.size} \t ${conditionallyImmutableTraits.size}")
-    println(s"Objects \t ${mutableObjects.size} \t ${shallowImmutableObjects.size} \t ${immutableObjects.size} \t ${conditionallyImmutableObjects.size}")
-    println(s"Anonymous Classes \t ${mutableAnonymousClasses.size} \t ${shallowImmutableAnonymousClasses.size} \t ${immutableAnonymousClasses.size} \t ${conditionallyImmutableAnonymousClasses.size}")
-
+    printDataRows(data)
     println("-")
   }
 
@@ -289,230 +335,31 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
     }).sorted.mkString("\n"))
   }
 
+  def printDataRows(data: Data): Unit = {
+    println(s"Class \t ${data.mutable.classes.size} \t ${data.shallowImmutable.classes.size} \t ${data.deeplyImmutable.classes.size} \t ${data.conditionallyImmutable.classes.size}")
+    println(s"Case class \t ${data.mutable.caseClasses.size} \t ${data.shallowImmutable.caseClasses.size} \t ${data.deeplyImmutable.caseClasses.size} \t ${data.conditionallyImmutable.caseClasses.size}")
+    println(s"Anonymous class \t ${data.mutable.anonymousClasses.size} \t ${data.shallowImmutable.anonymousClasses.size} \t ${data.deeplyImmutable.anonymousClasses.size} \t ${data.conditionallyImmutable.anonymousClasses.size}")
+    println(s"Trait \t ${data.mutable.traits.size} \t ${data.shallowImmutable.traits.size} \t ${data.deeplyImmutable.traits.size} \t ${data.conditionallyImmutable.traits.size}")
+    println(s"Object \t ${data.mutable.objects.size} \t ${data.shallowImmutable.objects.size} \t ${data.deeplyImmutable.objects.size} \t ${data.conditionallyImmutable.objects.size}")
+    println(s"Case object \t ${data.mutable.caseObjects.size} \t ${data.shallowImmutable.caseObjects.size} \t ${data.deeplyImmutable.caseObjects.size} \t ${data.conditionallyImmutable.caseObjects.size}")
+  }
+
   def conditionallyImmutableInheritance() = {
-    var mutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var shallowImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var immutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var conditionallyImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    scanComponent.classesThatExtendWithTypeArguments.foreach(x => {
-      val klass = x._1.asInstanceOf[mutabilityComponent.global.Symbol]
-      val parents = x._2
-      parents.foreach(parent => {
-        val conditionallyImmutable = mutabilityComponent.classToCellCompleter.get(parent.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
-          case Some(cellCompleter) => cellCompleter.cell.getResult == ConditionallyImmutable
-          case _ => false
-        }
-        if (conditionallyImmutable) {
-          parent.typeArgs.foreach(typeArgument => {
-            mutabilityComponent.classToCellCompleter.get(typeArgument.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
-              case Some(typeArgumentCellCompleter) =>
-                if (typeArgumentCellCompleter.cell.getResult() == Mutable || typeArgumentCellCompleter.cell.getResult() == ShallowImmutable) {
-                  println(s"Class inheritance used Mutable/Shallow on a ConditionallyImmutable. Klass: ${klass}, Mutable/Shallow: ${typeArgument.typeSymbol.fullName}, cond: ${parent.typeSymbol.fullName}")
-                  val immutability = mutabilityComponent.classToCellCompleter.getOrElse(klass, null).cell.getResult()
-                  println(s"Found a class '${klass}' (with immutability property ${immutability}) that extends a klass '${parent.typeSymbol.fullName}' (that is conditionally immutable) using a type argument with immutability property '${typeArgumentCellCompleter.cell.getResult()}' (${typeArgument.typeSymbol.fullName})")
-                  if (klass.isModuleClass) {
-                    immutability match {
-                      case Immutable => immutableObjects += klass
-                      case ShallowImmutable => shallowImmutableObjects += klass
-                      case Mutable => mutableObjects += klass
-                      case ConditionallyImmutable => conditionallyImmutableObjects += klass
-                      case _ =>
-                    }
-                  } else if (klass.isAnonymousClass) {
-                    immutability match {
-                      case Immutable => immutableAnonymousClasses += klass
-                      case ShallowImmutable => shallowImmutableAnonymousClasses += klass
-                      case Mutable => mutableAnonymousClasses += klass
-                      case ConditionallyImmutable => conditionallyImmutableAnonymousClasses += klass
-                      case _ =>
-                    }
-                  } else {
-                    if (klass hasFlag Flag.TRAIT) {
-                      immutability match {
-                        case Immutable => immutableTraits += klass
-                        case ShallowImmutable => shallowImmutableTraits += klass
-                        case Mutable => mutableTraits += klass
-                        case ConditionallyImmutable => conditionallyImmutableTraits += klass
-                        case _ =>
-                      }
-                    } else if (klass hasFlag Flag.CASE) {
-                      immutability match {
-                        case Immutable => immutableCaseClasses += klass
-                        case ShallowImmutable => shallowImmutableCaseClasses += klass
-                        case Mutable => mutableCaseClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableCaseClasses += klass
-                        case _ =>
-                      }
-                    } else if (klass hasFlag Flag.ABSTRACT) {
-                      immutability match {
-                        case Immutable => immutableAbstractClasses += klass
-                        case ShallowImmutable => shallowImmutableAbstractClasses += klass
-                        case Mutable => mutableAbstractClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableAbstractClasses += klass
-                        case _ =>
-                      }
-                    } else {
-                      immutability match {
-                        case Immutable => immutableClasses += klass
-                        case ShallowImmutable => shallowImmutableClasses += klass
-                        case Mutable => mutableClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableClasses += klass
-                        case _ =>
-                      }
-                    }
-                  }
-                }
-              case _ =>
-            }
-          })
-        }
-      })
-    })
+    val data = new Data()
+    data.conditionallyImmutableInheritance(scanComponent.classesThatExtendWithTypeArguments)
     println("## Classes that extend conditionally immutable with shallow/mutable argument")
     println(s"Type that extend ⬇️️ | Type's immutability ➡️️ \t Mutable \t Shallow immutable \t Deeply immutable \t Conditionally deeply immutable")
-    println(s"Classes \t ${mutableClasses.size} \t ${shallowImmutableClasses.size} \t ${immutableClasses.size} \t ${conditionallyImmutableClasses.size}")
-    println(s"Case Classes \t ${mutableCaseClasses.size} \t ${shallowImmutableCaseClasses.size} \t ${immutableCaseClasses.size} \t ${conditionallyImmutableCaseClasses.size}")
-    println(s"Abstract Classes \t ${mutableAbstractClasses.size} \t ${shallowImmutableAbstractClasses.size} \t ${immutableAbstractClasses.size} \t ${conditionallyImmutableAbstractClasses.size}")
-    println(s"Traits \t ${mutableTraits.size} \t ${shallowImmutableTraits.size} \t ${immutableTraits.size} \t ${conditionallyImmutableTraits.size}")
-    println(s"Objects \t ${mutableObjects.size} \t ${shallowImmutableObjects.size} \t ${immutableObjects.size} \t ${conditionallyImmutableObjects.size}")
-    println(s"Anonymous Classes \t ${mutableAnonymousClasses.size} \t ${shallowImmutableAnonymousClasses.size} \t ${immutableAnonymousClasses.size} \t ${conditionallyImmutableAnonymousClasses.size}")
+    printDataRows(data)
+    println("-")
   }
 
   def conditionallyImmutableField() = {
-    var mutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var mutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var shallowImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var shallowImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var immutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var immutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    var conditionallyImmutableObjects: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableTraits: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableCaseClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAbstractClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableClasses: Set[mutabilityComponent.global.Symbol] = Set()
-    var conditionallyImmutableAnonymousClasses: Set[mutabilityComponent.global.Symbol] = Set()
-
-    scanComponent.classesThatHaveFieldsWithTypeArguments.foreach(x => {
-      val klass = x._1.asInstanceOf[mutabilityComponent.global.Symbol]
-      val fields = x._2
-      fields.foreach(field => {
-        field.typeArgs.foreach(typeArgument => {
-          val conditionallyImmutable = mutabilityComponent.classToCellCompleter.get(field.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
-            case Some(cellCompleter) => cellCompleter.cell.getResult == ConditionallyImmutable
-            case _ => false
-          }
-          if (conditionallyImmutable) {
-            mutabilityComponent.classToCellCompleter.get(typeArgument.typeSymbol.asInstanceOf[mutabilityComponent.global.Symbol]) match {
-              case Some(typeArgumentCellCompleter) =>
-                if (typeArgumentCellCompleter.cell.getResult() == Mutable || typeArgumentCellCompleter.cell.getResult() == ShallowImmutable) {
-                  val immutability = mutabilityComponent.classToCellCompleter.getOrElse(klass.asInstanceOf[mutabilityComponent.global.Symbol], null).cell.getResult()
-                  println(s"Found a class '${klass}' (with immutability property ${immutability}) that had a field '${field}' that used a type with immutability property '${typeArgumentCellCompleter.cell.getResult()}' (${typeArgument.typeSymbol.fullName}) on a conditionally immutable class (${field.typeSymbol})")
-                  if (klass.isModuleClass) {
-                    immutability match {
-                      case Immutable => immutableObjects += klass
-                      case ShallowImmutable => shallowImmutableObjects += klass
-                      case Mutable => mutableObjects += klass
-                      case ConditionallyImmutable => conditionallyImmutableObjects += klass
-                      case _ =>
-                    }
-                  } else if (klass.isAnonymousClass) {
-                    immutability match {
-                      case Immutable => immutableAnonymousClasses += klass
-                      case ShallowImmutable => shallowImmutableAnonymousClasses += klass
-                      case Mutable => mutableAnonymousClasses += klass
-                      case ConditionallyImmutable => conditionallyImmutableAnonymousClasses += klass
-                      case _ =>
-                    }
-                  } else {
-                    if (klass hasFlag Flag.TRAIT) {
-                      immutability match {
-                        case Immutable => immutableTraits += klass
-                        case ShallowImmutable => shallowImmutableTraits += klass
-                        case Mutable => mutableTraits += klass
-                        case ConditionallyImmutable => conditionallyImmutableTraits += klass
-                        case _ =>
-                      }
-                    } else if (klass hasFlag Flag.CASE) {
-                      immutability match {
-                        case Immutable => immutableCaseClasses += klass
-                        case ShallowImmutable => shallowImmutableCaseClasses += klass
-                        case Mutable => mutableCaseClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableCaseClasses += klass
-                        case _ =>
-                      }
-                    } else if (klass hasFlag Flag.ABSTRACT) {
-                      immutability match {
-                        case Immutable => immutableAbstractClasses += klass
-                        case ShallowImmutable => shallowImmutableAbstractClasses += klass
-                        case Mutable => mutableAbstractClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableAbstractClasses += klass
-                        case _ =>
-                      }
-                    } else {
-                      immutability match {
-                        case Immutable => immutableClasses += klass
-                        case ShallowImmutable => shallowImmutableClasses += klass
-                        case Mutable => mutableClasses += klass
-                        case ConditionallyImmutable => conditionallyImmutableClasses += klass
-                        case _ =>
-                      }
-                    }
-                  }
-                }
-              case _ =>
-            }
-          }
-        })
-      })
-    })
-
+    val data = new Data()
+    data.conditionallyImmutableFields(scanComponent.classesThatHaveFieldsWithTypeArguments)
     println("## Classes that has a field that use a conditionally immutable with shallow/mutable argument")
     println(s"Type with field ⬇️️ | Type's immutability ➡️️ \t Mutable \t Shallow immutable \t Deeply immutable \t Conditionally deeply immutable")
-    println(s"Classes \t ${mutableClasses.size} \t ${shallowImmutableClasses.size} \t ${immutableClasses.size} \t ${conditionallyImmutableClasses.size}")
-    println(s"Case Classes \t ${mutableCaseClasses.size} \t ${shallowImmutableCaseClasses.size} \t ${immutableCaseClasses.size} \t ${conditionallyImmutableCaseClasses.size}")
-    println(s"Abstract Classes \t ${mutableAbstractClasses.size} \t ${shallowImmutableAbstractClasses.size} \t ${immutableAbstractClasses.size} \t ${conditionallyImmutableAbstractClasses.size}")
-    println(s"Traits \t ${mutableTraits.size} \t ${shallowImmutableTraits.size} \t ${immutableTraits.size} \t ${conditionallyImmutableTraits.size}")
-    println(s"Objects \t ${mutableObjects.size} \t ${shallowImmutableObjects.size} \t ${immutableObjects.size} \t ${conditionallyImmutableObjects.size}")
-    println(s"Anonymous Classes \t ${mutableAnonymousClasses.size} \t ${shallowImmutableAnonymousClasses.size} \t ${immutableAnonymousClasses.size} \t ${conditionallyImmutableAnonymousClasses.size}")
+    printDataRows(data)
+    println("-")
   }
 
   def reasonsCount() = {
@@ -548,7 +395,11 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
 
   def getSymbolType(sym: Symbol): String = {
     if (sym.isModuleClass) {
-      "Objects"
+      if (sym hasFlag Flag.CASE) {
+        "Case object"
+      } else {
+        "Objects"
+      }
     } else if (sym.isAnonymousClass) {
       "Anonymous classes"
     } else {
@@ -556,8 +407,6 @@ class ReporterComponent(val global: Global, val phaseName: String, val runsAfter
         "Traits"
       } else if (sym hasFlag Flag.CASE) {
         "Case classes"
-      } else if (sym hasFlag Flag.ABSTRACT) {
-        "Abstract classes"
       } else {
         "Classes"
       }
