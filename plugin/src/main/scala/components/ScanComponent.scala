@@ -63,9 +63,13 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     }
 
     def ensureCellCompleter(symbol: Symbol): Unit = {
-      if (classToCellCompleter.get(symbol) != null) {
-        val completer = CellCompleter[ImmutabilityKey.type, Immutability](Utils.getPool, ImmutabilityKey)
-        classToCellCompleter += (symbol -> completer)
+      //      classToCellCompleter.getOrElse(symbol, () => {
+      //        classToCellCompleter += (symbol -> CellCompleter[ImmutabilityKey.type, Immutability](Utils.getPool, ImmutabilityKey))
+      //      })
+
+      classToCellCompleter.get(symbol) match {
+        case None => classToCellCompleter += (symbol -> CellCompleter[ImmutabilityKey.type, Immutability](Utils.getPool, ImmutabilityKey))
+        case _ =>
       }
     }
 
@@ -102,6 +106,7 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
     override def traverse(tree: Tree): Unit = tree match {
       case cls@ClassDef(mods, name, tparams, impl) =>
         val symbol = cls.symbol
+
         if (!compilerGenerated(mods)) {
           // && !cls.symbol.isAnonymousClass) {
           // TODO: Anonymous class
@@ -166,4 +171,5 @@ class ScanComponent(val global: Global, val phaseName: String, val runsAfterPhas
       compilationUnitToCellCompleters += unit -> unitContentTraverser.classToCellCompleter
     }
   }
+
 }

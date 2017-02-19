@@ -287,12 +287,12 @@ object Assumptions {
     ImmutablePackages.exists(isInPackage(_, typeString))
   }
 
-  private def isInPackage(pack: String, typeString: String): Boolean = {
-    typeString.startsWith(pack)
-  }
-
   private def isInMutablePackage(typeString: String): Boolean = {
     MutablePackages.exists(isInPackage(_, typeString))
+  }
+
+  private def isInPackage(pack: String, typeString: String): Boolean = {
+    typeString.startsWith(pack)
   }
 
   def extractBaseClass(s: String): String = {

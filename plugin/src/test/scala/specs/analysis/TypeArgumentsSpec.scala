@@ -41,4 +41,18 @@ class TypeArgumentsSpec extends FlatSpec {
       """
     }
   }
+  Int
+  it should testNr in {
+    TestUtils.expectMutability(Map(List("Foo") -> Utils.IsConditionallyImmutable, List("Mutable") -> Utils.IsMutable, List("Bar") -> Utils.IsShallowImmutable)) {
+      """
+        class Mutable {
+          var foo: String = "mutable"
+        }
+        class Bar {
+          val test: Foo[Mutable] = new Foo(new Mutable)
+        }
+        class Foo[T](val a: T)
+      """
+    }
+  }
 }

@@ -14,6 +14,29 @@ class CyclicSpec extends FlatSpec {
   }
 
   it should testNr in {
+    TestUtils.expectMutability(List("A", "B"), Utils.IsDeeplyImmutable) {
+      """
+      class A {
+        val b: B = new B
+      }
+      class B {
+        val a: A = new A
+      }
+      """
+    }
+    TestUtils.expectMutability(List("A", "B"), Utils.IsDeeplyImmutable) {
+      """
+      class B {
+        val a: A = new A
+      }
+      class A {
+        val b: B = new B
+      }
+      """
+    }
+  }
+
+  it should testNr in {
     TestUtils.expectMutability(List("A", "B"), Utils.IsMutable) {
       """
       class A {

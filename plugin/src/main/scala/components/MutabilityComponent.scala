@@ -43,13 +43,55 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
     VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION -> "I",
     VAL_FIELD_REFERS_TO_SHALLOW -> "J"
   )
+  val REASONS_MAPPING_INV = REASONS_MAPPING.map(_.swap)
+  val MUTABLE_REASONS = Set(
+    REASONS_MAPPING(PARENT_WAS_MUTABLE_ASSUMPTION),
+    REASONS_MAPPING(PARENT_WAS_MUTABLE),
+    REASONS_MAPPING(FIELD_HAS_VAR_PUBLIC),
+    REASONS_MAPPING(FIELD_HAS_VAR_PRIVATE),
+    REASONS_MAPPING(PARENT_WAS_UNKNOWN)
+  )
+  val SHALLOW_REASONS = Set(
+    REASONS_MAPPING(PARENT_WAS_SHALLOW),
+    REASONS_MAPPING(VAL_FIELD_REFERS_TO_UNKNOWN),
+    REASONS_MAPPING(VAL_FIELD_REFERS_TO_MUTABLE),
+    REASONS_MAPPING(VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION),
+    REASONS_MAPPING(VAL_FIELD_REFERS_TO_SHALLOW)
+  )
   var classToCellCompleter: Map[Symbol, CellCompleter[ImmutabilityKey.type, Immutability]] = Map()
   var cellCompleterToClass: Map[CellCompleter[ImmutabilityKey.type, Immutability], Symbol] = Map()
   var classesWithoutCellCompleter: Set[Symbol] = Set()
   var assignmentWithoutCellCompleter: Set[Symbol] = Set()
-  var ImmutabilityReasons = Map[Symbol, Symbol]()
-  var ImmutabilityReasonsMutable = Map[Symbol, Set[String]]()
-  var ImmutabilityReasonsShallow = Map[Symbol, Set[String]]()
+  var ImmutabilityReason = Map[Symbol, Symbol]()
+  var ImmutabilityReasons = Map[Symbol, Set[String]]()
+
+  def getReasons(symbol: Symbol, immutability: Immutability) = {
+    immutability match {
+      case Mutable => getMutableReasons(symbol)
+      case ShallowImmutable => getShallowReasons(symbol)
+      case _ => getAllReasons(symbol)
+    }
+  }
+
+  def getAllReasons(symbol: Symbol): List[String] = {
+    val reasons = ImmutabilityReasons.getOrElse(symbol, Set[String]())
+    reasons.toList.filter((MUTABLE_REASONS ++ SHALLOW_REASONS).contains(_)).sorted
+  }
+
+  def getMutableReasons(symbol: Symbol): List[String] = {
+    val reasons = ImmutabilityReasons.getOrElse(symbol, Set[String]())
+    reasons.toList.filter(MUTABLE_REASONS.contains(_)).sorted
+  }
+
+  def getShallowReasons(symbol: Symbol): List[String] = {
+    val reasons = ImmutabilityReasons.getOrElse(symbol, Set[String]())
+    val isMutable = reasons.filter(MUTABLE_REASONS.contains(_)).size > 0
+    if (!isMutable) {
+      reasons.toList.filter(SHALLOW_REASONS.contains(_)).sorted
+    } else {
+      List[String]()
+    }
+  }
 
   override def newPhase(prev: Phase): StdPhase = new FirstPhase(prev)
 
@@ -60,25 +102,14 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
         Utils.log("Add immutability reason was null (this should never happen")
         System.exit(0)
       }
-      ImmutabilityReasons += (gotImmutability -> fromImmutability)
-      Utils.log(s"The class '${gotImmutability.fullName}' went ${immutability} because '${reason}' from '${fromImmutability.fullName}'")
-
-      if (immutability == Mutable) {
-        var set = ImmutabilityReasonsMutable.getOrElse(gotImmutability, null)
-        if (set == null) {
-          set = Set[String]()
-        }
-        set += reason
-        ImmutabilityReasonsMutable += gotImmutability -> set
-        ImmutabilityReasonsShallow -= gotImmutability
-      } else if (immutability == ShallowImmutable && !ImmutabilityReasonsMutable.contains(gotImmutability)) {
-        var set = ImmutabilityReasonsShallow.getOrElse(gotImmutability, null)
-        if (set == null) {
-          set = Set[String]()
-        }
-        set += reason
-        ImmutabilityReasonsShallow += gotImmutability -> set
+      val cellCompleter = classToCellCompleter.getOrElse(gotImmutability, null)
+      if (Immutability.immutabilityJoin(cellCompleter.cell.getResult, immutability)) {
+        ImmutabilityReason += (gotImmutability -> fromImmutability)
       }
+      Utils.log(s"The class '${gotImmutability.fullName}' received ${immutability} because '${reason}' from '${fromImmutability.fullName}'")
+      var set = ImmutabilityReasons.getOrElse(gotImmutability, Set[String]())
+      set += REASONS_MAPPING(reason)
+      ImmutabilityReasons += (gotImmutability -> set)
     }
 
     def compilerGenerated(mods: Modifiers): Boolean = {
@@ -130,11 +161,11 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
             if (mutability == Mutable) {
               if (classContext == ParentClassContext) {
                 addImmutabilityReason(klass, typeSymbol, Mutable, PARENT_WAS_MUTABLE_ASSUMPTION)
+                klassCompleter.putFinal(Mutable)
               } else if (classContext == ValDefinitionContext) {
-                mutability = ShallowImmutable
-                addImmutabilityReason(klass, typeSymbol, Mutable, VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION)
+                addImmutabilityReason(klass, typeSymbol, ShallowImmutable, VAL_FIELD_REFERS_TO_MUTABLE_ASSUMPTION)
+                klassCompleter.putNext(ShallowImmutable)
               }
-              klassCompleter.putFinal(mutability)
             }
           }
           List(mutability)
@@ -381,9 +412,8 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
         computeCellCompleterToClass()
         classesWithoutCellCompleter = Set[Symbol]()
         assignmentWithoutCellCompleter = Set[Symbol]()
-        ImmutabilityReasons = Map[Symbol, Symbol]()
-        ImmutabilityReasonsMutable = Map[Symbol, Set[String]]()
-        ImmutabilityReasonsShallow = Map[Symbol, Set[String]]()
+        ImmutabilityReason = Map[Symbol, Symbol]()
+        ImmutabilityReasons = Map[Symbol, Set[String]]()
       } else if (!initialized) {
         // Do the computation once, the scan component has already
         // traversed all compilation units
@@ -407,4 +437,5 @@ class MutabilityComponent(val global: Global, val phaseName: String, val runsAft
       cellCompleterToClass = classToCellCompleter.map(_.swap)
     }
   }
+
 }
