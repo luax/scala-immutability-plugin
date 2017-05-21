@@ -14,7 +14,7 @@ object Utils {
   // Treat private var as "val"
   val AllowPrivateVar = false
   // Assume that certain types are immutable/mutable e.g., "scala.collection.immutable.list" is immutable.
-  val MakeAssumptionAboutTypes = false
+  val MakeAssumptionAboutTypes = true
   private val TheScalaTestProject = false
   // TODO: Temporary fix, for when analyzing Scala test project itself.
   private val ScalaTestPattern = "scalatest"
