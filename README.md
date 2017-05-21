@@ -105,7 +105,7 @@ A class is deep immutable if:
 All known classes are by default assigned this property until another property holds.
 
 ### Conditionally Deeply immutable
-The conditionally deeply immutable property is given to a class that is deeply immutable but depends on some other potentially mutable type. An example of this is a generic collection that can store different types, and the collection itself is declared in a way so that it cannot be mutated, but the type that is used with the collection may be *shallow immutable* or *mutable*
+The conditionally deeply immutable property is given to a class that is deeply immutable but depends on some other potentially mutable type. An example of this is a generic collection that can store different types, and the collection itself is declared in a way so that it cannot be mutated, but the type that is used with the collection may be *shallow immutable* or *mutable*.
 A class has the *conditionally deeply immutable property* if:
 
 * It is *deeply immutable* with one or more type parameters.

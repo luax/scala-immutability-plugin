@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.signalcollect</groupId>
+		<artifactId>signal-collect-maven-parent</artifactId>
+		<version>8.0.2</version>
+	</parent>
+	<artifactId>signal-collect_2.11</artifactId>
+	<version>8.0.7-SNAPSHOT</version>
+	<packaging>jar</packaging>
+	<name>signal-collect</name>
+	<description>A framework for parallel and distributed graph processing.</description>
+	<properties>
+		<git.url>${git.url.base}/signal-collect.git</git.url>
+		<git.http.url>${ghe.url.base}/signal-collect</git.http.url>
+	</properties>
+	<url>${git.http.url}</url>
+	<scm>
+		<connection>scm:git:${git.url}</connection>
+		<url>${git.http.url}</url>
+		<developerConnection>scm:git:${git.url}</developerConnection>
+		<tag>HEAD</tag>
+	</scm>
+	<distributionManagement>
+		<site>
+			<id>githubsite</id>
+			<name>GitHub Pages</name>
+			<url>${site.target.url}</url>
+		</site>
+	</distributionManagement>
+	<dependencies>
+		<dependency>
+			<groupId>org.scala-lang</groupId>
+			<artifactId>scala-library</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.typesafe.akka</groupId>
+			<artifactId>akka-cluster_${scala.minor.version}</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.github.romix.akka</groupId>
+			<artifactId>akka-kryo-serialization_${scala.minor.version}</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.ceedubs</groupId>
+			<artifactId>ficus_${scala.minor.version}</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.json4s</groupId>
+			<artifactId>json4s-native_${scala.minor.version}</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.java-websocket</groupId>
+			<artifactId>Java-WebSocket</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.webjars</groupId>
+			<artifactId>d3js</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.webjars</groupId>
+			<artifactId>jquery</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.webjars</groupId>
+			<artifactId>reconnecting-websocket</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.webjars</groupId>
+			<artifactId>intro.js</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.scalatest</groupId>
+			<artifactId>scalatest_${scala.minor.version}</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.typesafe.akka</groupId>
+			<artifactId>akka-testkit_${scala.minor.version}</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.scalacheck</groupId>
+			<artifactId>scalacheck_${scala.minor.version}</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.easymock</groupId>
+			<artifactId>easymock</artifactId>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.scalatest</groupId>
+				<artifactId>scalatest-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>test</id>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration />
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+			  <groupId>net.alchim31.maven</groupId>
+			  <artifactId>scala-maven-plugin</artifactId>
+			  <configuration>
+			    <args>
+			      <arg>
+			        -Xplugin:../immutability_stats_plugin_assumptions.jar
+			      </arg>
+			    </args>
+			  </configuration>
+			</plugin>
+		</plugins>
+	</build>
+	<developers>
+		<developer>
+			<id>pstutz</id>
+			<name>Philip Stutz</name>
+			<url>https://github.com/pstutz</url>
+		</developer>
+		<developer>
+			<id>cshapeshifter</id>
+			<name>Carol Alexandru</name>
+			<url>https://github.com/cshapeshifter</url>
+		</developer>
+		<developer>
+			<id>troxler</id>
+			<name>Silvan Troxler</name>
+			<url>https://github.com/troxler</url>
+		</developer>
+		<developer>
+			<id>danistrebel</id>
+			<name>Daniel Strebel</name>
+			<url>https://github.com/danistrebel</url>
+		</developer>
+		<developer>
+			<id>elaverman</id>
+			<name>Mihaela Verman</name>
+			<url>https://github.com/elaverman</url>
+		</developer>
+		<developer>
+			<id>lorenzfischer</id>
+			<name>Lorenz Fischer</name>
+			<url>https://github.com/lorenzfischer</url>
+		</developer>
+		<developer>
+			<id>tmsklr</id>
+			<name>Thomas Keller</name>
+			<url>https://github.com/tmsklr</url>
+		</developer>
+		<developer>
+			<id>bibekp</id>
+			<name>Bibek Paudel</name>
+			<url>https://github.com/bibekp</url>
+		</developer>
+		<developer>
+			<id>rampalli-github</id>
+			<name>Srinivas Rampalli</name>
+			<url>https://github.com/rampalli-github</url>
+		</developer>
+		<developer>
+			<id>sunnylbk</id>
+			<name>Bharath Kumar</name>
+			<url>https://github.com/sunnylbk</url>
+		</developer>
+		<developer>
+			<id>mykelalvis</id>
+			<name>Mykel Alvis</name>
+			<organization>Cotiviti</organization>
+			<organizationUrl>http://www.cotiviti.io</organizationUrl>
+			<url>https://github.com/mykelalvis</url>
+			<timezone>America/Chicago</timezone>
+			<roles>
+				<role>release management</role>
+			</roles>
+		</developer>
+	</developers>
+</project>
